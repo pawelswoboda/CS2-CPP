@@ -22,7 +22,9 @@
 #include <math.h>
 #include <assert.h>
 
-using namespace std;
+#include <algorithm>
+
+namespace CS2_CPP {
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -418,5 +420,7 @@ class MCMF_CS2
 		}
 	}
 };
+
+} // end namespace CS2_CPP
 
 #endif

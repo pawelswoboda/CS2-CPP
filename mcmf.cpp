@@ -1,7 +1,7 @@
 #include "mcmf.h"
 #include <string.h>
 
-using namespace std;
+namespace CS2_CPP {
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -1667,6 +1667,7 @@ int MCMF_CS2::run_cs2()
 //
 ////////////////////////////////////////////////////////////////////////////////
 
+/*
 int main( int argc, char *argv[])
 {
 	//"p min 6 8
@@ -1704,3 +1705,6 @@ int main( int argc, char *argv[])
 
 	return 0;
 }
+*/
+
+} // end namespace CS2_CPP
