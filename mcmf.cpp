@@ -51,34 +51,29 @@ namespace CS2_CPP {
 	}
 
 
-void MCMF_CS2::err_end( int cc)
-{
-	// abnormal finish
-	printf ("\nError %d\n", cc );
-	// 2 - problem is unfeasible
-	// 5 - allocation fault
-	// 6 - price overflow
-	exit( cc);
-}
 
 void MCMF_CS2::allocate_arrays()
 {
 	// (1) allocate memory for 'nodes', 'arcs' and internal arrays;
 
-	_nodes = (NODE*) calloc ( _n+2,   sizeof(NODE) );
+   // TODO: make unique pointers out of that.
+	_nodes = (NODE*) calloc ( _n+1,   sizeof(NODE) );
+   //_nodes = std::unique_ptr<NODE[]>{ new NODE[_n+1] };
+   //std::fill(&_nodes[0], &_nodes[_n+1], 0);
 	_arcs = (ARC*)  calloc ( 2*_m+1, sizeof(ARC) );
 	_cap = (long*) calloc ( 2*_m,   sizeof(long) );
 
-	_arc_tail = (long*) calloc ( 2*_m,   sizeof(long) );
-	_arc_first = (long*) calloc ( _n+2,   sizeof(long) );
-	// arc_first [ 0 .. n+1 ] = 0 - initialized by calloc;
+	_arc_tail = std::unique_ptr<long[]>{ new long[2*_m] }; // _arc_tail = (long*) calloc ( 2*_m,   sizeof(long) );
+   std::fill(&_arc_tail[0], &_arc_tail[2*_m], 0);
+	_arc_first = std::unique_ptr<long[]>{ new long[_n+1] }; //(long*) calloc ( _n+1,   sizeof(long) );
+   std::fill(&_arc_first[0], &_arc_first[_n+1], 0);
+	// arc_first [ 0 .. n ] = 0 - initialized by calloc;
 
 	for ( NODE *in = _nodes; in <= _nodes + _n; in ++ ) {
 		in->set_excess( 0);
 	}
 	if ( _nodes == NULL || _arcs == NULL || _arc_first == NULL || _arc_tail == NULL) {
-		printf("Error:  Memory allocation problem inside CS2\n");
-		exit( 1);
+      throw std::runtime_error("Error:  Memory allocation problem inside CS2\n");
 	}
 
 	// (2) resets;
@@ -99,10 +94,10 @@ void MCMF_CS2::deallocate_arrays()
 	if ( _cap) free ( _cap );
 	if ( _buckets) free ( _buckets );
 	if ( _check_solution == true) free ( _node_balance );
-	if ( _nodes) {
-		_nodes = _nodes - _node_min;
-		free ( _nodes );
-	}
+   if ( _nodes) {
+      _nodes = _nodes - _node_min;
+      free ( _nodes );
+   }
 }
 
 void MCMF_CS2::set_arc( long tail_node_id, long head_node_id,
@@ -111,19 +106,18 @@ void MCMF_CS2::set_arc( long tail_node_id, long head_node_id,
 {
 	// DIMACS format:
 	// c arc has <tail> <head> <capacity l.b.> <capacity u.b> <cost>
+   assert(_pos_current < 2*_m);
 
-	if ( tail_node_id < 0 || tail_node_id > _n || 
-		 head_node_id < 0 || head_node_id > _n ) {
-		printf("Error:  Arc with head or tail out of bounds inside CS2\n");
-		exit( 1);
-	}
-	if ( up_bound < 0 ) {
-		up_bound = MAX_32;
-		printf("Warning:  Infinite capacity replaced by BIGGEST_FLOW\n");
-	}
-	if ( low_bound < 0 || low_bound > up_bound ) {
-		printf("Error:  Wrong capacity bounds inside CS2\n");
-		exit( 1);
+	if ( tail_node_id < 0 || tail_node_id >= _n || 
+		 head_node_id < 0 || head_node_id >= _n ) {
+      throw std::runtime_error("Error:  Arc with head or tail out of bounds inside CS2");
+   }
+   if ( up_bound < 0 ) {
+      up_bound = MAX_32;
+      std::cout << "Warning:  Infinite capacity replaced by BIGGEST_FLOW\n";
+   }
+   if ( low_bound < 0 || low_bound > up_bound ) {
+      throw std::runtime_error("Error:  Wrong capacity bounds inside CS2\n");
 	}
 
 	// no of arcs incident to node i is placed in _arc_first[i+1]
@@ -167,8 +161,7 @@ void MCMF_CS2::set_supply_demand_of_node( long id, long excess)
 {
 	// set supply and demand of nodes; not used for transhipment nodes;
 	if ( id < 0 || id > _n ) {
-		printf("Error:  Unbalanced problem inside CS2\n");
-		exit( 1);
+      throw std::runtime_error("Error:  Unbalanced problem inside CS2\n");
 	}
 	(_nodes + id)->set_excess( excess);
 	if ( excess > 0) _total_p += excess;
@@ -179,6 +172,7 @@ void MCMF_CS2::pre_processing()
 {
 	// called after the arcs were just added and before run_cs2();
 	// ordering arcs - linear time algorithm;
+   // arcs are ordered so that they are ordered first by tail node and second by order of insertion. Here original implementation differs.
 	long i;
 	long last, arc_num, arc_new_num;;
 	long tail_node_id;
@@ -190,8 +184,7 @@ void MCMF_CS2::pre_processing()
 	excess_t cap_in; // sum of incoming capacities
 
 	if ( ABS( _total_p - _total_n ) > 0.5 ) {
-		printf("Error:  Unbalanced problem inside CS2\n");
-		exit( 1);
+      throw std::runtime_error("Error:  Unbalanced problem inside CS2\n");
 	}
 	
 	// first arc from the first node
@@ -206,8 +199,9 @@ void MCMF_CS2::pre_processing()
 		( _nodes + i )->set_first( _arcs + _arc_first[i] );
 	}
 
+   long* perm = new long[_n]; // for holding permutations for sorting
 	// scanning all the nodes except the last
-	for ( i = _node_min; i < _node_max; i ++ ) {
+	for ( i = _node_min; i <= _node_max; i ++ ) {
 
 		last = ( ( _nodes + i + 1 )->first() ) - _arcs;
 		// arcs outgoing from i must be cited    
@@ -261,14 +255,50 @@ void MCMF_CS2::pre_processing()
 				// we increase arc_first[tail_node_id]
 				_arc_first[tail_node_id] ++ ;
 
-				tail_node_id = _arc_tail[arc_num];
-			}
-		}
-		// all arcs outgoing from  i  are in place
-	}       
-	// arcs are ordered by now!
+            tail_node_id = _arc_tail[arc_num];
+         }
+      }
+      // all arcs outgoing from  i  are in place
 
-
+      // sort outgoing arcs of every node by head node id.
+      // this is not done in the original implementation.
+      long s = _nodes[i+1].first() - _nodes[i].first();
+      for(int c=0; c<s; ++c) {
+         perm[c] = c;
+      }
+      ARC* arc = _nodes[i].first();
+      long* cap = &_cap[N_ARC(arc)];
+      std::sort(perm, perm+s, 
+            [arc](int i, int j) { return arc[i].head() < arc[j].head(); });
+      // now follow cycles in permutation. negate permutation entries to avoid permuting back
+      for(int c=0; c<s; ++c) {
+         long next_idx = perm[c];
+         if(next_idx == c || next_idx < 0) {
+            continue;
+         }
+         long cur_idx = c;
+         ARC tmp_arc = arc[cur_idx];
+         long tmp_cap = cap[cur_idx];
+         while(next_idx >= 0) {
+            std::swap(tmp_arc, arc[next_idx]); // now tmp holds next element
+            std::swap(tmp_cap, cap[next_idx]); // now tmp holds next element
+            perm[cur_idx] -= s; // mark as visited
+            cur_idx = next_idx;
+            next_idx = perm[next_idx];
+         }
+         std::swap(tmp_arc, arc[s+next_idx]); // now tmp holds next element
+         std::swap(tmp_cap, cap[s+next_idx]); // now tmp holds next element
+      }
+      //std::sort(_nodes[i].first(), _nodes[i+1].first(),
+      //      [] (ARC& a, ARC& b) { return a.head() < b.head(); });
+      // correct sister arcs
+      for(ARC* a = _nodes[i].first(); a<_nodes[i+1].first() ; ++a) {
+         a->sister()->set_sister(a);
+      }
+   }
+   // arcs are ordered by now!
+   delete[] perm;
+   
 	// testing network for possible excess overflow
 	for ( NODE *ndp = _nodes + _node_min; ndp <= _nodes + _node_max; ndp ++ ) {
 		cap_in  =   ( ndp->excess() );
@@ -281,9 +311,8 @@ void MCMF_CS2::pre_processing()
 				cap_in += _cap[ _arc_current->sister() - _arcs ];
 		}
 	}
-	if ( _node_min < 0 || _node_min > 1 ) {
-		printf("Error:  Node ids must start from 0 or 1 inside CS2\n");
-		exit( 1);
+	if ( _node_min != 0 ) {
+      throw std::runtime_error("node ids must start from 0 inside CS2");
 	}
 
 	// adjustments due to nodes' ids being between _node_min - _node_max;
@@ -291,8 +320,10 @@ void MCMF_CS2::pre_processing()
 	_nodes = _nodes + _node_min;
 
 	// () free internal memory, not needed anymore inside CS2;
-	free ( _arc_first ); 
-	free ( _arc_tail );
+   _arc_first.reset();
+   _arc_tail.reset();
+	//free ( _arc_first ); 
+	//free ( _arc_tail );
 }
 
 void MCMF_CS2::cs2_initialize()
@@ -357,7 +388,7 @@ void MCMF_CS2::cs2_initialize()
 
 	_buckets = (BUCKET*) calloc ( _linf, sizeof(BUCKET));
 	if ( _buckets == NULL )
-		err_end( ALLOCATION_FAULT);
+      throw std::runtime_error("Allocation fault");
 
 	_l_bucket = _buckets + _linf;
 
@@ -551,9 +582,9 @@ int MCMF_CS2::relabel( NODE *i)
 				i->set_price( _price_min);
 			} else {
 				if ( _n_ref == 1 ) {
-					err_end( UNFEASIBLE );
+               throw std::runtime_error("problem infeasible");
 				} else {
-					err_end( PRICE_OFL );
+               throw std::runtime_error("price overflow");
 				}
 			}
 		} else { // node can't be relabelled because of suspended arcs;
@@ -789,7 +820,7 @@ void MCMF_CS2::refine()
 
 				while ( _flag_updt ) {
 					if ( _n_ref == 1 ) {
-						err_end( UNFEASIBLE );
+                  throw std::runtime_error("problem infeasible");
 					} else {
 						_flag_updt = 0;
 						update_cut_off();
@@ -1248,6 +1279,8 @@ int MCMF_CS2::check_feas()
 	if ( _check_solution == false)
 		return ( 0);
 	
+   return 0;
+   /*
 	NODE *i;
 	ARC *a, *a_stop;
 	long fa;
@@ -1275,6 +1308,7 @@ int MCMF_CS2::check_feas()
 	}
 
 	return ( ans);
+   */
 }
 
 int MCMF_CS2::check_cs()
@@ -1434,24 +1468,44 @@ void MCMF_CS2::cs2_cost_restart( double *objective_cost)
 	finishup( objective_cost );
 }
 
+long long int MCMF_CS2::compute_objective_cost() const
+{
+   double obj = 0;
+   int na;
+   ARC* a;
+   long flow;
+   for (a = _arcs, na = 0; a != _sentinel_arc ; a ++, na ++ ) {
+      double cs = a->cost();
+      if ( _cap[na]  > 0 && (flow = _cap[na] - a->rez_capacity()) != 0 )
+         obj += (double) cs * (double) flow;
+   }
+
+   return obj;
+}
+
 void MCMF_CS2::print_solution()
 {
 	if ( _print_ans == false)
 		return;
+
+   for(ARC* a=_arcs; a<_arcs+_m; ++a) {
+      std::cout << N_NODE(a->sister()->head()) << "->" << N_NODE(a->head()) << ": flow = " << a->rez_capacity()  - _cap[N_ARC(a)] << "\n";
+   }
+   return;
 	
+	price_t cost;
+   
 	NODE *i;
 	ARC *a;
 	long ni;
-	price_t cost;
-	printf ("c\ns %.0l\n", cost );
-
 	for ( i = _nodes; i < _nodes + _n; i ++ ) {
 		ni = N_NODE( i );
 		for ( a = i->suspended(); a != (i+1)->suspended(); a ++) {
-			if ( _cap[ N_ARC (a) ]  > 0 ) {
-				printf("f %7ld %7ld %10ld\n", 
-					   ni, N_NODE(a->head()), _cap[ N_ARC(a) ] - a->rez_capacity());
-			}
+         std::cout << a->rez_capacity();
+			//if ( _cap[ N_ARC (a) ]  > 0 ) {
+			//	printf("f %7ld %7ld %10ld\n", 
+			//		   ni, N_NODE(a->head()), _cap[ N_ARC(a) ] - a->rez_capacity());
+			//}
 		}
     }
 
@@ -1482,7 +1536,7 @@ void MCMF_CS2::print_graph()
 			na = N_ARC( a );
 			printf("\n {%d} %d -> %d  cap: %d  cost: %d", na,
 				ni, N_NODE(a->head()), _cap[N_ARC(a)], a->cost());
-		}
+      }
     }
 }
 
@@ -1562,7 +1616,7 @@ void MCMF_CS2::cs2( double *objective_cost)
 	finishup( objective_cost );
 }
 
-int MCMF_CS2::run_cs2()
+long long int MCMF_CS2::run_cs2()
 {
 	// example of flow network in DIMACS format:
 	//
@@ -1655,9 +1709,7 @@ int MCMF_CS2::run_cs2()
 		print_solution();
 	}
 
-	// () cleanup;
-	deallocate_arrays();
-	return 0;
+   return objective_cost;
 }
 
 

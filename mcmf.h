@@ -23,6 +23,8 @@
 #include <assert.h>
 
 #include <algorithm>
+#include <iostream>
+#include <memory>
 
 namespace CS2_CPP {
 
@@ -36,16 +38,8 @@ namespace CS2_CPP {
 #define MAX_32 (0x7fffffff)
 #define PRICE_MAX MAX_64
 
-#define MAXLINE       100 // max line length in the input file
-#define ARC_FIELDS      5 // no of fields in arc line
-#define NODE_FIELDS     2 // no of fields in node line
-#define P_FIELDS        3 // no of fields in problem line
-#define PROBLEM_TYPE "min" //  name of problem type
 
-#define UNFEASIBLE          2
-#define ALLOCATION_FAULT    5
-#define PRICE_OFL           6
-
+// TODO: make class parameters out of that, possibly constexpr ones
 // parameters
 #define UPDT_FREQ      0.4
 #define UPDT_FREQ_S    30
@@ -167,6 +161,7 @@ class MCMF_CS2
 
 	long *_cap; // array containig capacities
 	NODE *_nodes; // array of nodes
+   //std::unique_ptr<NODE[]> _nodes; // array of nodes
 	NODE *_sentinel_node; // next after last
 	NODE *_excq_first; // first node in push-queue
 	NODE *_excq_last; // last node in push-queue
@@ -229,10 +224,10 @@ class MCMF_CS2
 	// sketch variables used during reading in arcs;
 	long _node_min; // minimal no of nodes
 	long _node_max; // maximal no of nodes
-    long *_arc_first; // internal array for holding
-                      // - node degree
-                      // - position of the first outgoing arc
-	long *_arc_tail; // internal array: tails of the arcs
+   std::unique_ptr<long[]> _arc_first; // internal array for holding
+                     // - node degree
+                     // - position of the first outgoing arc
+	std::unique_ptr<long[]> _arc_tail; // internal array: tails of the arcs
 	long _pos_current;
 	ARC *_arc_current;
 	ARC *_arc_new;
@@ -243,6 +238,7 @@ class MCMF_CS2
 	// pointers to the node structure
 	NODE *_i_node;
 	NODE *_j_node;
+
 
  public:
 	MCMF_CS2( long num_nodes, long num_arcs) {
@@ -272,7 +268,9 @@ class MCMF_CS2
 		// will also reset _pos_current, etc.;
 		allocate_arrays();
 	}
-	~MCMF_CS2() {}
+	~MCMF_CS2() {
+      deallocate_arrays();
+   }
 
 	void err_end( int cc);
 	void allocate_arrays();
@@ -302,7 +300,16 @@ class MCMF_CS2
 	void print_graph();
 	void finishup( double *objective_cost);
 	void cs2( double *objective_cost);
-	int run_cs2();
+	price_t run_cs2();
+
+   // information functions
+   price_t compute_objective_cost() const;
+   long get_arc_tail(const long arc_id) const { return N_NODE(_arcs[arc_id].sister()->head()); }
+   long get_arc_head(const long arc_id) const { return N_NODE(_arcs[arc_id].head()); }
+   long get_flow(const long arc_id, const long orig_cap) const { return orig_cap - _arcs[arc_id].rez_capacity(); }
+   long get_residual_flow(const long arc_id) const { return _arcs[arc_id].rez_capacity(); } // original flow i capacity - residual flow
+   long get_cost(const long arc_id) const { return _arcs[arc_id].cost(); }
+   void set_cost(const long arc_id, const price_t cost) { assert(false); }
 
 	// shared utils;
 	void increase_flow( NODE *i, NODE *j, ARC *a, long df) {
