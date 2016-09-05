@@ -27,5 +27,5 @@ before_install:
   - sudo apt-get update -qq
 script:
   - cmake . -DBUILD_TESTS=ON -DDOWNLOAD_TEST_DEPENDENCIES=ON 
-  - make 
+  - make VERBOSE=1
   - cd test && ctest
