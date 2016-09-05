@@ -135,6 +135,9 @@ TEST_CASE( "assignment problem", "[assignment]" ) {
    for(int i=0; i<num_arcs; ++i) {
       REQUIRE(mcf_reverse.get_flow(i) < 3);
    }
+}
+
+TEST_CASE( "dynamic problem", "[dynamic]" ) {
 
 }
 
