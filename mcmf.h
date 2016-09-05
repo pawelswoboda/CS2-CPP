@@ -19,7 +19,7 @@
 
 //#include <stdio.h>
 //#include <stdlib.h>
-//#include <math.h>
+#include <cmath>
 #include <assert.h>
 
 #include <algorithm>
@@ -303,9 +303,11 @@ class MCMF_CS2
 	void cs2( double *objective_cost);
 	price_t run_cs2();
 
+   void init() { pre_processing(); } // needs to be called after adding all edges
+
    // information functions
    long no_nodes() const { return _n; }
-   long no_arcs() const { return _m; }
+   long no_arcs() const { return 2*_m; }
    price_t compute_objective_cost() const;
    long get_arc_tail(const long arc_id) const { return N_NODE(_arcs[arc_id].sister()->head()); }
    long get_arc_head(const long arc_id) const { return N_NODE(_arcs[arc_id].head()); }

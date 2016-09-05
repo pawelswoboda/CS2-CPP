@@ -98,7 +98,7 @@ void MCMF_CS2::deallocate_arrays()
 	if ( _dnode) delete _dnode;
 	//if ( _cap) free ( _cap );
 	//if ( _buckets) free ( _buckets );
-	if ( _check_solution == true) free ( _node_balance );
+	//if ( _check_solution == true) free ( _node_balance );
    //if ( _nodes) {
    //   _nodes = _nodes - _node_min;
    //   free ( _nodes );
@@ -344,7 +344,7 @@ void MCMF_CS2::cs2_initialize()
 
 	_f_scale = (long) SCALE_DEFAULT;
 	_sentinel_node = _nodes.get() + _n;
-	_sentinel_arc  = _arcs.get() + _m;
+	_sentinel_arc  = _arcs.get() + 2*_m;
 
 	for ( i = _nodes.get(); i != _sentinel_node; i ++ ) {
 		i->set_price( 0);
@@ -1494,7 +1494,7 @@ void MCMF_CS2::print_solution()
 	if ( _print_ans == false)
 		return;
 
-   for(ARC* a=_arcs.get(); a<_arcs.get()+_m; ++a) {
+   for(ARC* a=_arcs.get(); a<_arcs.get()+_m*2; ++a) {
       std::cout << N_NODE(a->sister()->head()) << "->" << N_NODE(a->head()) << ": flow = " << a->rez_capacity()  - _cap[N_ARC(a)] << "\n";
    }
    return;
@@ -1658,25 +1658,25 @@ long long int MCMF_CS2::run_cs2()
 
 
 	// (4) ordering, etc.;
-	pre_processing();
+	//pre_processing();
 
 
 	// () CHECK_SOLUTION?
-	if ( _check_solution == true) {
-		_node_balance = (long long int *) calloc (_n+1, sizeof(long long int));
-		for ( NODE *i = _nodes.get(); i < _nodes.get() + _n; i ++ ) {
-			_node_balance[N_NODE(i)] = i->excess();
-		}
-	}
+	//if ( _check_solution == true) {
+	//	_node_balance = (long long int *) calloc (_n+1, sizeof(long long int));
+	//	for ( NODE *i = _nodes.get(); i < _nodes.get() + _n; i ++ ) {
+	//		_node_balance[N_NODE(i)] = i->excess();
+	//	}
+	//}
 
 
 	// (5) initializations;
-	_m = 2 * _m;
+	//_m = 2 * _m;
 	cs2_initialize(); // works already with 2*m;
 	print_graph(); // exit(1); // debug;
 
    std::cout << "\nc CS 4.3\n";
-   std::cout << "c nodes: " << _n << " arcs: " << _m/2 << "\n";
+   std::cout << "c nodes: " << _n << " arcs: " << _m << "\n";
    std::cout << "c scale-factor: " << _f_scale << " cut-off-factor: " << _cut_off_factor << "\nc\n",
 
 	
@@ -1714,52 +1714,5 @@ long long int MCMF_CS2::run_cs2()
 
    return objective_cost;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////
-//
-// main
-//
-////////////////////////////////////////////////////////////////////////////////
-
-/*
-int main( int argc, char *argv[])
-{
-	//"p min 6 8
-	//c min-cost flow problem with 6 nodes and 8 arcs
-	//n 1 10
-	//c supply of 10 at node 1
-	//n 6 -10
-	//c demand of 10 at node 6
-	//c arc list follows
-	//c arc has <tail> <head> <capacity l.b.> <capacity u.b> <cost>
-	//a 1 2 0 4 1
-	//a 1 3 0 8 5
-	//a 2 3 0 5 0
-	//a 3 5 0 10 1
-	//a 5 4 0 8 0
-	//a 5 6 0 8 9
-	//a 4 2 0 8 1
-	//a 4 6 0 8 1"
-	int num_nodes = 6;
-	int num_arcs = 8;
-	MCMF_CS2 my_mcmf_problem( num_nodes, num_arcs);
-
-	my_mcmf_problem.set_arc( 1, 2, 0, 4, 1);
-	my_mcmf_problem.set_arc( 1, 3, 0, 8, 5);
-	my_mcmf_problem.set_arc( 2, 3, 0, 5, 0);
-	my_mcmf_problem.set_arc( 3, 5, 0, 10, 1);
-	my_mcmf_problem.set_arc( 5, 4, 0, 8, 0);
-	my_mcmf_problem.set_arc( 5, 6, 0, 8, 9);
-	my_mcmf_problem.set_arc( 4, 2, 0, 8, 1);
-	my_mcmf_problem.set_arc( 4, 6, 0, 8, 1);
-	my_mcmf_problem.set_supply_demand_of_node( 1, 10);
-	my_mcmf_problem.set_supply_demand_of_node( 6, -10);
-
-	my_mcmf_problem.run_cs2();
-
-	return 0;
-}
-*/
 
 } // end namespace CS2_CPP
