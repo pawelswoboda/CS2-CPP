@@ -26,6 +26,6 @@ matrix:
 before_install:
   - sudo apt-get update -qq
 script:
-  - cmake . -DUSE_SUPERBUILD=ON -DBUILD_TESTS=ON
+  - cmake . -DBUILD_TESTS=ON -DDOWNLOAD_TEST_DEPENDENCIES=ON 
   - make 
   - cd test && ctest

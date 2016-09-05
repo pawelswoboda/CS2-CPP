@@ -64,8 +64,6 @@ namespace CS2_CPP {
 #define MAX( x, y ) ( ( (x) > (y) ) ?  x : y )
 #define MIN( x, y ) ( ( (x) < (y) ) ? x : y )
 #define ABS( x ) ( (x) >= 0 ) ? (x) : -(x)
-//#define N_NODE( i ) ( ( (i) == NULL ) ? -1 : ( (i) - _nodes + _node_min ) )
-//#define N_ARC( a ) ( ( (a) == NULL )? -1 : (a) - _arcs )
 
 class MCMF_CS2
 {
@@ -316,7 +314,10 @@ class MCMF_CS2
    long get_cost(const long arc_id) const { return _arcs[arc_id].cost(); }
    long get_reduced_cost(const long arc_id) const { return get_cost(arc_id) + get_price(get_arc_tail(arc_id)) - get_price(get_arc_head(arc_id)); }
    long get_price(const long node_id) const { return _nodes[node_id].price(); }
-   void set_cost(const long arc_id, const price_t cost) { assert(false); }
+   void set_cost(const long arc_id, const price_t cost) { 
+      _arcs[arc_id].set_cost(cost);
+      _arcs[arc_id].sister()->set_cost(-cost);
+   }
    void set_cap(const long arc_id, const long cap) { assert(cap >= 0); _cap[arc_id] = cap; }
 
    //#define N_NODE( i ) ( ( (i) == NULL ) ? -1 : ( (i) - _nodes + _node_min ) )
