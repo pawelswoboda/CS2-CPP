@@ -1,0 +1,27 @@
+language: cpp
+
+compiler:
+- clang
+- gcc
+
+os:
+- linux
+- osx
+
+  matrix:
+     include:
+
+        - os: linux
+     compiler: gcc-4.8
+     script:
+        - cmake . -DUSE_SUPERBUILD=ON -DBUILD_TESTS=ON
+        - make 
+        - cd test && ctest
+
+        - os: osx
+     compiler: clang
+     script:
+        - cmake . -DUSE_SUPERBUILD=ON -DBUILD_TESTS=ON
+        - make 
+        - cd test && ctest
+
