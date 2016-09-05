@@ -1,7 +1,17 @@
 cmake_minimum_required(VERSION 2.8)
 
-option(BUILD_TESTS "build tests" OFF)
+# C++11
+add_compile_options(-std=c++14)
+#SET(C++_STD_FLAG "c++14")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${C++_STD_FLAG}")
+#MARK_AS_ADVANCED(C++_STD_FLAG)
 
+# compiler options
+add_definitions(-DIL_STD)
+add_definitions(-ffast-math)
+add_definitions(-march=native)
+
+option(BUILD_TESTS "build tests" OFF)
 
 if(BUILD_TESTS)
    option(DOWNLOAD_TEST_DEPENDENCIES "Download test dependencies" ON)
@@ -38,17 +48,6 @@ if(BUILD_TESTS)
       return()
    endif()
 endif()
-
-# C++11
-SET(C++_STD_FLAG "c++14")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${C++_STD_FLAG}")
-MARK_AS_ADVANCED(C++_STD_FLAG)
-
-# compiler options
-add_definitions(-DIL_STD)
-add_definitions(-ffast-math)
-add_definitions(-march=native)
-
 
 project(CS2_CPP)
 add_library(CS2_CPP STATIC
