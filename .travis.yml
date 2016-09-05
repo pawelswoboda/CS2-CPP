@@ -1,27 +1,48 @@
 # Use new trusty images, should yield newer compilers and packages
 sudo: required
 dist: trusty
-language: cpp
+language: generic
 
 matrix:
   include:
-    - compiler: gcc
+    - os: linux
+      env: COMPILER_NAME=gcc CXX=g++-5 CC=gcc-5
       addons:
         apt:
-          sources:
-            - ubuntu-toolchain-r-test
           packages:
             - g++-5
-      env: COMPILER=g++-5
-    - compiler: clang
+          sources: &sources
+            - llvm-toolchain-precise-3.8
+            - ubuntu-toolchain-r-test
+    - os: linux
+      env: COMPILER_NAME=clang CXX=clang++-3.8 CC=clang-3.8
       addons:
         apt:
-          sources:
-            - ubuntu-toolchain-r-test
-            - llvm-toolchain-precise-3.7
           packages:
             - clang-3.8
-      env: COMPILER=clang++-3.7
+          sources: *sources
+
+
+
+#matrix:
+   #  include:
+     #    - compiler: gcc
+#      addons:
+         #        apt:
+           #          sources:
+             #            - ubuntu-toolchain-r-test
+#          packages:
+             #            - g++-5
+#      env: COMPILER=g++-5
+#    - compiler: clang
+#      addons:
+         #        apt:
+           #          sources:
+             #            - ubuntu-toolchain-r-test
+              #            - llvm-toolchain-precise-3.7
+#          packages:
+             #            - clang-3.8
+#      env: COMPILER=clang++-3.7
     
 before_install:
   - sudo apt-get update -qq
