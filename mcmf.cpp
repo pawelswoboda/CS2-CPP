@@ -57,11 +57,16 @@ void MCMF_CS2::allocate_arrays()
 	// (1) allocate memory for 'nodes', 'arcs' and internal arrays;
 
    // TODO: make unique pointers out of that.
-	_nodes = (NODE*) calloc ( _n+1,   sizeof(NODE) );
-   //_nodes = std::unique_ptr<NODE[]>{ new NODE[_n+1] };
-   //std::fill(&_nodes[0], &_nodes[_n+1], 0);
-	_arcs = (ARC*)  calloc ( 2*_m+1, sizeof(ARC) );
-	_cap = (long*) calloc ( 2*_m,   sizeof(long) );
+	//_nodes = (NODE*) calloc ( _n+1,   sizeof(NODE) );
+   _nodes = std::unique_ptr<NODE[]>{ new NODE[_n+1] };
+   std::fill(&_nodes[0], &_nodes[_n+1], NODE());
+	//_arcs = (ARC*)  calloc ( 2*_m+1, sizeof(ARC) );
+   _arcs = std::unique_ptr<ARC[]>{ new ARC[2*_m+1] };
+   std::fill(_arcs.get(), _arcs.get()+2*_m+1, ARC());
+	//_cap = (long*) calloc ( 2*_m,   sizeof(long) );
+   _cap = std::unique_ptr<long[]>{ new long[2*_m] };
+   std::fill(&_cap[0], &_cap[2*_m], 0);
+   _dnode = new NODE;
 
 	_arc_tail = std::unique_ptr<long[]>{ new long[2*_m] }; // _arc_tail = (long*) calloc ( 2*_m,   sizeof(long) );
    std::fill(&_arc_tail[0], &_arc_tail[2*_m], 0);
@@ -69,7 +74,7 @@ void MCMF_CS2::allocate_arrays()
    std::fill(&_arc_first[0], &_arc_first[_n+1], 0);
 	// arc_first [ 0 .. n ] = 0 - initialized by calloc;
 
-	for ( NODE *in = _nodes; in <= _nodes + _n; in ++ ) {
+	for ( NODE *in = _nodes.get(); in <= _nodes.get() + _n; in ++ ) {
 		in->set_excess( 0);
 	}
 	if ( _nodes == NULL || _arcs == NULL || _arc_first == NULL || _arc_tail == NULL) {
@@ -78,7 +83,7 @@ void MCMF_CS2::allocate_arrays()
 
 	// (2) resets;
 	_pos_current = 0;
-	_arc_current = _arcs; // set "current" pointer to the first arc
+	_arc_current = _arcs.get(); // set "current" pointer to the first arc
 	_node_max = 0;
 	_node_min = _n;
 	_max_cost = 0;
@@ -89,15 +94,15 @@ void MCMF_CS2::allocate_arrays()
 
 void MCMF_CS2::deallocate_arrays()
 { 
-	if ( _arcs) free ( _arcs );
+	//if ( _arcs) free ( _arcs );
 	if ( _dnode) delete _dnode;
-	if ( _cap) free ( _cap );
-	if ( _buckets) free ( _buckets );
+	//if ( _cap) free ( _cap );
+	//if ( _buckets) free ( _buckets );
 	if ( _check_solution == true) free ( _node_balance );
-   if ( _nodes) {
-      _nodes = _nodes - _node_min;
-      free ( _nodes );
-   }
+   //if ( _nodes) {
+   //   _nodes = _nodes - _node_min;
+   //   free ( _nodes );
+   //}
 }
 
 void MCMF_CS2::set_arc( long tail_node_id, long head_node_id,
@@ -123,8 +128,8 @@ void MCMF_CS2::set_arc( long tail_node_id, long head_node_id,
 	// no of arcs incident to node i is placed in _arc_first[i+1]
 	_arc_first[tail_node_id + 1] ++; 
 	_arc_first[head_node_id + 1] ++;
-	_i_node = _nodes + tail_node_id;
-	_j_node = _nodes + head_node_id;
+	_i_node = _nodes.get() + tail_node_id;
+	_j_node = _nodes.get() + head_node_id;
 
 	// store information about the arc
 	_arc_tail[_pos_current]   = tail_node_id;
@@ -134,7 +139,7 @@ void MCMF_CS2::set_arc( long tail_node_id, long head_node_id,
 	_cap[_pos_current] = up_bound;
 	_arc_current->set_cost( cost );
 	_arc_current->set_sister( _arc_current + 1 );
-	( _arc_current + 1 )->set_head( _nodes + tail_node_id );
+	( _arc_current + 1 )->set_head( _nodes.get() + tail_node_id );
 	( _arc_current + 1 )->set_rez_capacity( 0 );
 	_cap[_pos_current+1] = 0;
 	( _arc_current + 1 )->set_cost( -cost );
@@ -163,7 +168,7 @@ void MCMF_CS2::set_supply_demand_of_node( long id, long excess)
 	if ( id < 0 || id > _n ) {
       throw std::runtime_error("Error:  Unbalanced problem inside CS2\n");
 	}
-	(_nodes + id)->set_excess( excess);
+	(_nodes.get() + id)->set_excess( excess);
 	if ( excess > 0) _total_p += excess;
 	if ( excess < 0) _total_n -= excess;
 }
@@ -188,7 +193,7 @@ void MCMF_CS2::pre_processing()
 	}
 	
 	// first arc from the first node
-	( _nodes + _node_min )->set_first( _arcs );
+	( _nodes.get() + _node_min )->set_first( _arcs.get() );
 
 	// before below loop arc_first[i+1] is the number of arcs outgoing from i;
 	// after this loop arc_first[i] is the position of the first 
@@ -196,14 +201,14 @@ void MCMF_CS2::pre_processing()
 	// this value is transformed to pointer and written to node.first[i]
 	for ( i = _node_min + 1; i <= _node_max + 1; i ++ ) {
 		_arc_first[i] += _arc_first[i-1];
-		( _nodes + i )->set_first( _arcs + _arc_first[i] );
+		( _nodes.get() + i )->set_first( _arcs.get() + _arc_first[i] );
 	}
 
    long* perm = new long[_n]; // for holding permutations for sorting
 	// scanning all the nodes except the last
 	for ( i = _node_min; i <= _node_max; i ++ ) {
 
-		last = ( ( _nodes + i + 1 )->first() ) - _arcs;
+		last = N_ARC( ( _nodes.get() + i + 1 )->first() );// - _arcs.get();
 		// arcs outgoing from i must be cited    
 		// from position arc_first[i] to the position
 		// equal to initial value of arc_first[i+1]-1
@@ -218,8 +223,8 @@ void MCMF_CS2::pre_processing()
 				// until an arc in this position would go out from i
 
 				arc_new_num = _arc_first[tail_node_id];
-				_arc_current = _arcs + arc_num;
-				arc_new = _arcs + arc_new_num;
+				_arc_current = _arcs.get() + arc_num;
+				arc_new = _arcs.get() + arc_new_num;
 	    
 				// arc_current must be cited in the position arc_new    
 				// swapping these arcs:
@@ -300,15 +305,15 @@ void MCMF_CS2::pre_processing()
    delete[] perm;
    
 	// testing network for possible excess overflow
-	for ( NODE *ndp = _nodes + _node_min; ndp <= _nodes + _node_max; ndp ++ ) {
+	for ( NODE *ndp = _nodes.get() + _node_min; ndp <= _nodes.get() + _node_max; ndp ++ ) {
 		cap_in  =   ( ndp->excess() );
 		cap_out = - ( ndp->excess() );
 		for ( _arc_current = ndp->first(); _arc_current != (ndp+1)->first(); 
 			  _arc_current ++ ) {
-			arc_num = _arc_current - _arcs;
+			arc_num = N_ARC(_arc_current);
 			if ( _cap[arc_num] > 0 ) cap_out += _cap[arc_num];
 			if ( _cap[arc_num] == 0 ) 
-				cap_in += _cap[ _arc_current->sister() - _arcs ];
+				cap_in += _cap[ N_ARC(_arc_current->sister()) ];
 		}
 	}
 	if ( _node_min != 0 ) {
@@ -317,7 +322,7 @@ void MCMF_CS2::pre_processing()
 
 	// adjustments due to nodes' ids being between _node_min - _node_max;
 	_n = _node_max - _node_min + 1;
-	_nodes = _nodes + _node_min;
+	//_nodes = _nodes.get() + _node_min;
 
 	// () free internal memory, not needed anymore inside CS2;
    _arc_first.reset();
@@ -338,10 +343,10 @@ void MCMF_CS2::cs2_initialize()
 	long df;
 
 	_f_scale = (long) SCALE_DEFAULT;
-	_sentinel_node = _nodes + _n;
-	_sentinel_arc  = _arcs + _m;
+	_sentinel_node = _nodes.get() + _n;
+	_sentinel_arc  = _arcs.get() + _m;
 
-	for ( i = _nodes; i != _sentinel_node; i ++ ) {
+	for ( i = _nodes.get(); i != _sentinel_node; i ++ ) {
 		i->set_price( 0);
 		i->set_suspended( i->first());
 		i->set_q_next( _sentinel_node);
@@ -351,7 +356,7 @@ void MCMF_CS2::cs2_initialize()
 	_sentinel_node->set_suspended( _sentinel_arc);
 
 	// saturate negative arcs, e.g. in the circulation problem case
-	for ( i = _nodes; i != _sentinel_node; i ++ ) {
+	for ( i = _nodes.get(); i != _sentinel_node; i ++ ) {
 		for ( a = i->first(), a_stop = (i + 1)->suspended(); a != a_stop; a ++ ) {
 			if ( a->cost() < 0) {
 				if ( ( df = a->rez_capacity()) > 0) {
@@ -366,12 +371,12 @@ void MCMF_CS2::cs2_initialize()
 		_dn = 2 * _dn;
 	}
 
-	for ( a = _arcs; a != _sentinel_arc; a ++ ) {
+	for ( a = _arcs.get(); a != _sentinel_arc; a ++ ) {
 		a->multiply_cost( _dn);
 	}
 
 	if ( _no_zero_cycles == true) { // NO_ZERO_CYCLES
-		for ( a = _arcs; a != _sentinel_arc; a ++ ) {
+		for ( a = _arcs.get(); a != _sentinel_arc; a ++ ) {
 			if ((a->cost() == 0) && (a->sister()->cost() == 0)) {
 				a->set_cost( 1);
 				a->sister()->set_cost( -1);
@@ -386,15 +391,16 @@ void MCMF_CS2::cs2_initialize()
 
 	_linf = (long) (_dn * ceil(_f_scale) + 2);
 
-	_buckets = (BUCKET*) calloc ( _linf, sizeof(BUCKET));
-	if ( _buckets == NULL )
-      throw std::runtime_error("Allocation fault");
+	//_buckets = (BUCKET*) calloc ( _linf, sizeof(BUCKET));
+	_buckets = std::unique_ptr<BUCKET[]>( new BUCKET[_linf] );//, sizeof(BUCKET));
+	//if ( _buckets == NULL )
+   //   throw std::runtime_error("Allocation fault");
 
-	_l_bucket = _buckets + _linf;
+	_l_bucket = _buckets.get() + _linf;
 
-	_dnode = new NODE; // used as reference;
+	//_dnode = new NODE; // used as reference;
 
-	for ( b = _buckets; b != _l_bucket; b ++ ) {
+	for ( b = _buckets.get(); b != _l_bucket; b ++ ) {
 		reset_bucket( b);
 	}
 
@@ -460,11 +466,11 @@ void MCMF_CS2::up_node_scan( NODE *i)
 					j->set_current( ra);
 
 					if ( j_rank < _linf ) {
-						b_old = _buckets + j_rank;
+						b_old = _buckets.get() + j_rank;
 						REMOVE_FROM_BUCKET( j, b_old );
 					}
 
-					b_new = _buckets + j_new_rank;
+					b_new = _buckets.get() + j_new_rank;
 					insert_to_bucket( j, b_new );
 				}
 			}
@@ -485,9 +491,9 @@ void MCMF_CS2::price_update()
 
 	_n_update ++;
 
-	for ( i = _nodes; i != _sentinel_node; i ++ ) {
+	for ( i = _nodes.get(); i != _sentinel_node; i ++ ) {
 		if ( i->excess() < 0 ) {
-			insert_to_bucket( i, _buckets );
+			insert_to_bucket( i, _buckets.get() );
 			i->set_rank( 0);
 		} else {
 			i->set_rank( _linf);
@@ -498,7 +504,7 @@ void MCMF_CS2::price_update()
 	if ( remain < 0.5 ) return;
 
 	// scanning buckets, main loop;
-	for ( b = _buckets; b != _l_bucket; b ++ ) {
+	for ( b = _buckets.get(); b != _l_bucket; b ++ ) {
 
 		while ( nonempty_bucket( b) ) {
 
@@ -517,13 +523,13 @@ void MCMF_CS2::price_update()
 
 	// finishup 
 	// changing prices for nodes which were not scanned during main loop;
-	dp = ( b - _buckets ) * _epsilon;
+	dp = ( b - _buckets.get() ) * _epsilon;
 
-	for ( i = _nodes; i != _sentinel_node; i ++ ) {
+	for ( i = _nodes.get(); i != _sentinel_node; i ++ ) {
 
 		if ( i->rank() >= 0 ) {
 			if ( i->rank() < _linf ) {
-				REMOVE_FROM_BUCKET( i, ( _buckets + i->rank()) );
+				REMOVE_FROM_BUCKET( i, ( _buckets.get() + i->rank()) );
 			}
 			if ( i->price() > _price_min ) {
 				i->dec_price( dp);
@@ -681,7 +687,7 @@ int MCMF_CS2::price_in()
 
  restart:
 
-	for ( i = _nodes; i != _sentinel_node; i ++ ) {
+	for ( i = _nodes.get(); i != _sentinel_node; i ++ ) {
 
 		for ( a = i->first() - 1, a_stop = i->suspended() - 1; a != a_stop; a -- ) {
 
@@ -730,7 +736,7 @@ int MCMF_CS2::price_in()
 		_n_src = 0;
 		reset_excess_q();
 
-		for ( i = _nodes; i != _sentinel_node; i ++ ) {
+		for ( i = _nodes.get(); i != _sentinel_node; i ++ ) {
 			i->set_current( i->first());
 			i_exc = i->excess();
 			if ( i_exc > 0 ) { // i is a source;
@@ -774,7 +780,7 @@ void MCMF_CS2::refine()
 
 	_time_for_price_in = TIME_FOR_PRICE_IN1;
 
-	for ( i = _nodes; i != _sentinel_node; i ++ ) {
+	for ( i = _nodes.get(); i != _sentinel_node; i ++ ) {
 		i->set_current( i->first());
 		i_exc = i->excess();
 		if ( i_exc > 0 ) { // i  is a source 
@@ -882,14 +888,14 @@ int MCMF_CS2::price_refine()
 	while ( 1 ) { 
 
 		nnc = 0;
-		for ( i = _nodes; i != _sentinel_node; i ++ ) {
+		for ( i = _nodes.get(); i != _sentinel_node; i ++ ) {
 			i->set_rank( 0);
 			i->set_inp( WHITE);
 			i->set_current( i->first());
 		}
 		reset_stackq();
 
-		for ( i = _nodes; i != _sentinel_node; i ++ ) {
+		for ( i = _nodes.get(); i != _sentinel_node; i ++ ) {
 			if ( i->inp() == BLACK ) continue;
 
 			i->set_b_next( NULL);
@@ -999,7 +1005,7 @@ int MCMF_CS2::price_refine()
 
 			if ( i_rank > 0 ) {
 				if ( i_rank > bmax ) bmax = i_rank;
-				b = _buckets + i_rank;
+				b = _buckets.get() + i_rank;
 				insert_to_bucket( i, b );
 			}
 		} // end of while-cycle: all nodes are scanned - longest distancess are computed;
@@ -1009,8 +1015,8 @@ int MCMF_CS2::price_refine()
 			{ break; }
 
 
-		for ( b = _buckets + bmax; b != _buckets; b -- ) {
-			i_rank = b - _buckets;
+		for ( b = _buckets.get() + bmax; b != _buckets.get(); b -- ) {
+			i_rank = b - _buckets.get();
 			dp = i_rank * _epsilon;
 
 			while ( nonempty_bucket( b) ) {
@@ -1033,10 +1039,10 @@ int MCMF_CS2::price_refine()
 								if ( cc == 1 ) {
 									j->set_rank( j_new_rank);
 									if ( j_rank > 0 ) {
-										b_old = _buckets + j_rank;
+										b_old = _buckets.get() + j_rank;
 										REMOVE_FROM_BUCKET( j, b_old );
 									}
-									b_new = _buckets + j_new_rank;
+									b_new = _buckets.get() + j_new_rank;
 									insert_to_bucket( j, b_new );
 								}
 								else {
@@ -1063,7 +1069,7 @@ int MCMF_CS2::price_refine()
 	// if refine needed - saturate non-epsilon-optimal arcs;
 
 	if ( cc == 0 ) { 
-		for ( i = _nodes; i != _sentinel_node; i ++) {
+		for ( i = _nodes.get(); i != _sentinel_node; i ++) {
 			for ( a = i->first(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
 				if ( REDUCED_COST( i, a->head(), a ) < - _epsilon ) {
 					if ( ( df = a->rez_capacity() ) > 0 ) {
@@ -1102,14 +1108,14 @@ void MCMF_CS2::compute_prices()
 	// while negative cycle is found or eps-optimal solution is constructed
 	while ( 1 ) {
 
-		for ( i = _nodes; i != _sentinel_node; i ++) {
+		for ( i = _nodes.get(); i != _sentinel_node; i ++) {
 			i->set_rank( 0);
 			i->set_inp( WHITE);
 			i->set_current( i->first());
 		}
 		reset_stackq();
 
-		for ( i = _nodes; i != _sentinel_node; i ++ ) {
+		for ( i = _nodes.get(); i != _sentinel_node; i ++ ) {
 			if ( i->inp() == BLACK ) continue;
 
 			i->set_b_next( NULL);
@@ -1182,7 +1188,7 @@ void MCMF_CS2::compute_prices()
 
 			if ( i_rank > 0 ) {
 				if ( i_rank > bmax ) bmax = i_rank;
-				b = _buckets + i_rank;
+				b = _buckets.get() + i_rank;
 				insert_to_bucket( i, b );
 			}
 		} // end of while-cycle: all nodes are scanned - longest distancess are computed;
@@ -1190,8 +1196,8 @@ void MCMF_CS2::compute_prices()
 		if ( bmax == 0 )
 			{ break; }
 
-		for ( b = _buckets + bmax; b != _buckets; b -- ) {
-			i_rank = b - _buckets;
+		for ( b = _buckets.get() + bmax; b != _buckets.get(); b -- ) {
+			i_rank = b - _buckets.get();
 			dp = i_rank;
 
 			while ( nonempty_bucket( b) ) {
@@ -1215,10 +1221,10 @@ void MCMF_CS2::compute_prices()
 								if ( cc == 1 ) {
 									j->set_rank( j_new_rank);
 									if ( j_rank > 0 ) {
-										b_old = _buckets + j_rank;
+										b_old = _buckets.get() + j_rank;
 										REMOVE_FROM_BUCKET( j, b_old );
 									}
-									b_new = _buckets + j_new_rank;
+									b_new = _buckets.get() + j_new_rank;
 									insert_to_bucket( j, b_new );
 								}
 							}
@@ -1247,7 +1253,7 @@ void MCMF_CS2::price_out()
 
 	n_cut_off = - _cut_off;
 
-	for ( i = _nodes; i != _sentinel_node; i ++) {
+	for ( i = _nodes.get(); i != _sentinel_node; i ++) {
 		for ( a = i->first(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
 
 			rc = REDUCED_COST( i, a->head(), a );		
@@ -1317,7 +1323,7 @@ int MCMF_CS2::check_cs()
 	NODE *i;
 	ARC *a, *a_stop;
 
-	for ( i = _nodes; i != _sentinel_node; i ++) {
+	for ( i = _nodes.get(); i != _sentinel_node; i ++) {
 		for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
 
 			if ( OPEN(a) && (REDUCED_COST(i, a->head(), a) < 0) ) {
@@ -1333,7 +1339,7 @@ int MCMF_CS2::check_eps_opt()
 	NODE *i;
 	ARC *a, *a_stop;
 
-	for ( i = _nodes; i != _sentinel_node; i ++) {
+	for ( i = _nodes.get(); i != _sentinel_node; i ++) {
 		for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
 
 			if ( OPEN(a) && (REDUCED_COST(i, a->head(), a) < - _epsilon) ) {
@@ -1351,7 +1357,7 @@ void MCMF_CS2::init_solution()
 	NODE *j; // head of a
 	long df; // residual capacity
 
-	for ( a = _arcs; a != _sentinel_arc; a ++ ) {
+	for ( a = _arcs.get(); a != _sentinel_arc; a ++ ) {
 		if ( a->rez_capacity() > 0 && a->cost() < 0 ) {
 			df = a->rez_capacity();
 			i  = a->sister()->head();
@@ -1373,12 +1379,12 @@ void MCMF_CS2::cs_cost_reinit()
 	price_t rc, minc, sum;
 
 
-	for ( b = _buckets; b != _l_bucket; b ++) {
+	for ( b = _buckets.get(); b != _l_bucket; b ++) {
 		reset_bucket( b);
 	}
 
 	rc = 0;
-	for ( i = _nodes; i != _sentinel_node; i ++) {
+	for ( i = _nodes.get(); i != _sentinel_node; i ++) {
 		rc = MIN(rc, i->price());
 		i->set_first( i->suspended());
 		i->set_current( i->first());
@@ -1386,17 +1392,17 @@ void MCMF_CS2::cs_cost_reinit()
 	}
 
 	// make prices nonnegative and multiply 
-	for ( i = _nodes; i != _sentinel_node; i ++) {
+	for ( i = _nodes.get(); i != _sentinel_node; i ++) {
 		i->set_price( (i->price() - rc) * _dn);
 	}
 
 	// multiply arc costs
-	for (a = _arcs; a != _sentinel_arc; a ++) {
+	for (a = _arcs.get(); a != _sentinel_arc; a ++) {
 		a->multiply_cost( _dn);
 	}
 
 	sum = 0;
-	for ( i = _nodes; i != _sentinel_node; i ++) {
+	for ( i = _nodes.get(); i != _sentinel_node; i ++) {
 		minc = 0;
 		for ( a = i->first(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {		
 			if ( (OPEN(a) && ((rc = REDUCED_COST(i, a->head(), a)) < 0)) )
@@ -1474,7 +1480,7 @@ long long int MCMF_CS2::compute_objective_cost() const
    int na;
    ARC* a;
    long flow;
-   for (a = _arcs, na = 0; a != _sentinel_arc ; a ++, na ++ ) {
+   for (a = _arcs.get(), na = 0; a != _sentinel_arc ; a ++, na ++ ) {
       double cs = a->cost();
       if ( _cap[na]  > 0 && (flow = _cap[na] - a->rez_capacity()) != 0 )
          obj += (double) cs * (double) flow;
@@ -1488,7 +1494,7 @@ void MCMF_CS2::print_solution()
 	if ( _print_ans == false)
 		return;
 
-   for(ARC* a=_arcs; a<_arcs+_m; ++a) {
+   for(ARC* a=_arcs.get(); a<_arcs.get()+_m; ++a) {
       std::cout << N_NODE(a->sister()->head()) << "->" << N_NODE(a->head()) << ": flow = " << a->rez_capacity()  - _cap[N_ARC(a)] << "\n";
    }
    return;
@@ -1498,7 +1504,7 @@ void MCMF_CS2::print_solution()
 	NODE *i;
 	ARC *a;
 	long ni;
-	for ( i = _nodes; i < _nodes + _n; i ++ ) {
+	for ( i = _nodes.get(); i < _nodes.get() + _n; i ++ ) {
 		ni = N_NODE( i );
 		for ( a = i->suspended(); a != (i+1)->suspended(); a ++) {
          std::cout << a->rez_capacity();
@@ -1512,10 +1518,10 @@ void MCMF_CS2::print_solution()
 	// COMP_DUALS?
 	if ( _comp_duals == true) { // find minimum price;
 		cost = MAX_32;
-		for ( i = _nodes; i != _sentinel_node; i ++) {
+		for ( i = _nodes.get(); i != _sentinel_node; i ++) {
 			cost = MIN(cost, i->price());
 		}
-		for ( i = _nodes; i != _sentinel_node; i ++) {
+		for ( i = _nodes.get(); i != _sentinel_node; i ++) {
 			printf("p %7ld %7.2lld\n", N_NODE(i), i->price() - cost);
 		}
 	}
@@ -1529,7 +1535,7 @@ void MCMF_CS2::print_graph()
 	ARC *a;
 	long ni, na;
 	printf ("\nGraph: %d\n", _n);
-	for ( i = _nodes; i < _nodes + _n; i ++ ) {
+	for ( i = _nodes.get(); i < _nodes.get() + _n; i ++ ) {
 		ni = N_NODE( i );
 		printf("\nNode %d", ni);
 		for ( a = i->suspended(); a != (i+1)->suspended(); a ++) {
@@ -1551,7 +1557,7 @@ void MCMF_CS2::finishup( double *objective_cost)
 
 	// (1) NO_ZERO_CYCLES?
 	if ( _no_zero_cycles == true) {
-		for ( a = _arcs; a != _sentinel_arc; a ++ ) {
+		for ( a = _arcs.get(); a != _sentinel_arc; a ++ ) {
 			if ( a->cost() == 1) {
 				assert( a->sister()->cost() == -1);
 				a->set_cost( 0);
@@ -1561,14 +1567,14 @@ void MCMF_CS2::finishup( double *objective_cost)
 	}
 
 	// (2)
-	for ( a = _arcs, na = 0; a != _sentinel_arc ; a ++, na ++ ) {
+	for ( a = _arcs.get(), na = 0; a != _sentinel_arc ; a ++, na ++ ) {
 		cs = a->cost() / _dn;
 		if ( _cap[na]  > 0 && (flow = _cap[na] - a->rez_capacity()) != 0 )
 			obj_internal += (double) cs * (double) flow;
 		a->set_cost( cs);
 	}
 
-	for ( i = _nodes; i != _sentinel_node; i ++) {
+	for ( i = _nodes.get(); i != _sentinel_node; i ++) {
 		i->set_price( (i->price() / _dn));
 	}
 
@@ -1659,8 +1665,8 @@ long long int MCMF_CS2::run_cs2()
 	// () CHECK_SOLUTION?
 	if ( _check_solution == true) {
 		_node_balance = (long long int *) calloc (_n+1, sizeof(long long int));
-		for ( NODE *i = _nodes; i < _nodes + _n; i ++ ) {
-			_node_balance[i - _nodes] = i->excess();
+		for ( NODE *i = _nodes.get(); i < _nodes.get() + _n; i ++ ) {
+			_node_balance[N_NODE(i)] = i->excess();
 		}
 	}
 

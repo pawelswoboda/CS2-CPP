@@ -64,8 +64,8 @@ namespace CS2_CPP {
 #define MAX( x, y ) ( ( (x) > (y) ) ?  x : y )
 #define MIN( x, y ) ( ( (x) < (y) ) ? x : y )
 #define ABS( x ) ( (x) >= 0 ) ? (x) : -(x)
-#define N_NODE( i ) ( ( (i) == NULL ) ? -1 : ( (i) - _nodes + _node_min ) )
-#define N_ARC( a ) ( ( (a) == NULL )? -1 : (a) - _arcs )
+//#define N_NODE( i ) ( ( (i) == NULL ) ? -1 : ( (i) - _nodes + _node_min ) )
+//#define N_ARC( a ) ( ( (a) == NULL )? -1 : (a) - _arcs )
 
 class MCMF_CS2
 {
@@ -112,7 +112,7 @@ class MCMF_CS2
 		long _inp; // auxilary field;
 	public:
 		NODE() {}
-		~NODE() {}
+      ~NODE() {}
 
 		void set_excess( excess_t excess) { _excess = excess; }
 		void dec_excess( long delta) { _excess -= delta; }
@@ -159,16 +159,19 @@ class MCMF_CS2
 	long _n; // number of nodes
 	long _m; // number of arcs
 
-	long *_cap; // array containig capacities
-	NODE *_nodes; // array of nodes
-   //std::unique_ptr<NODE[]> _nodes; // array of nodes
+   std::unique_ptr<long[]> _cap;
+	//long *_cap; // array containig capacities
+	//NODE *_nodes; // array of nodes
+   std::unique_ptr<NODE[]> _nodes; // array of nodes
 	NODE *_sentinel_node; // next after last
 	NODE *_excq_first; // first node in push-queue
 	NODE *_excq_last; // last node in push-queue
-	ARC *_arcs; // array of arcs
+	//ARC *_arcs; // array of arcs
+   std::unique_ptr<ARC[]> _arcs;
 	ARC *_sentinel_arc; // next after last
 
-	BUCKET *_buckets; // array of buckets
+	//BUCKET *_buckets; // array of buckets
+   std::unique_ptr<BUCKET[]> _buckets; // array of buckets
 	BUCKET *_l_bucket; // last bucket
 	long _linf; // number of l_bucket + 1
 	int _time_for_price_in;
@@ -303,13 +306,25 @@ class MCMF_CS2
 	price_t run_cs2();
 
    // information functions
+   long no_nodes() const { return _n; }
+   long no_arcs() const { return _m; }
    price_t compute_objective_cost() const;
    long get_arc_tail(const long arc_id) const { return N_NODE(_arcs[arc_id].sister()->head()); }
    long get_arc_head(const long arc_id) const { return N_NODE(_arcs[arc_id].head()); }
-   long get_flow(const long arc_id, const long orig_cap) const { return orig_cap - _arcs[arc_id].rez_capacity(); }
+   long get_flow(const long arc_id) const { return _cap[arc_id] - _arcs[arc_id].rez_capacity(); }
    long get_residual_flow(const long arc_id) const { return _arcs[arc_id].rez_capacity(); } // original flow i capacity - residual flow
    long get_cost(const long arc_id) const { return _arcs[arc_id].cost(); }
+   long get_reduced_cost(const long arc_id) const { return get_cost(arc_id) + get_price(get_arc_tail(arc_id)) - get_price(get_arc_head(arc_id)); }
+   long get_price(const long node_id) const { return _nodes[node_id].price(); }
    void set_cost(const long arc_id, const price_t cost) { assert(false); }
+   void set_cap(const long arc_id, const long cap) { assert(cap >= 0); _cap[arc_id] = cap; }
+
+   //#define N_NODE( i ) ( ( (i) == NULL ) ? -1 : ( (i) - _nodes + _node_min ) )
+   long N_NODE(NODE* n) const { return n - _nodes.get() + _node_min; }
+   //#define N_ARC( a ) ( ( (a) == NULL )? -1 : (a) - _arcs )
+   long N_ARC(ARC* a) const { return a - _arcs.get(); }
+
+ 
 
 	// shared utils;
 	void increase_flow( NODE *i, NODE *j, ARC *a, long df) {
@@ -421,9 +436,9 @@ class MCMF_CS2
 				sb->set_sister( a);
 			}
 						
-			d_cap = _cap[ a - _arcs];
-			_cap[ a - _arcs] = _cap[ b - _arcs];
-			_cap[ b - _arcs] = d_cap;	
+			d_cap = _cap[N_ARC(a)];
+			_cap[N_ARC(a)] = _cap[N_ARC(b)];
+			_cap[N_ARC(b)] = d_cap;	
 		}
 	}
 };
