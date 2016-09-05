@@ -402,7 +402,7 @@ class MCMF_CS2
 	// misc utils;
 	void update_cut_off() {
 		if ( _n_bad_pricein + _n_bad_relabel == 0) {
-			_cut_off_factor = CUT_OFF_COEF2 * pow( (double)_n, CUT_OFF_POWER2 );
+			_cut_off_factor = CUT_OFF_COEF2 * std::pow( _n, CUT_OFF_POWER2 );
 			_cut_off_factor = MAX ( _cut_off_factor, CUT_OFF_MIN );
 			_cut_off = _cut_off_factor * _epsilon;
 			_cut_on = _cut_off * CUT_OFF_GAP;

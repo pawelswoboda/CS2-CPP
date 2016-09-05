@@ -389,7 +389,7 @@ void MCMF_CS2::cs2_initialize()
 	}
 	_mmc = _max_cost * _dn;
 
-	_linf = (long) (_dn * ceil(_f_scale) + 2);
+	_linf = (long) (_dn * std::ceil(_f_scale) + 2);
 
 	//_buckets = (BUCKET*) calloc ( _linf, sizeof(BUCKET));
 	_buckets = std::unique_ptr<BUCKET[]>( new BUCKET[_linf] );//, sizeof(BUCKET));
@@ -411,7 +411,7 @@ void MCMF_CS2::cs2_initialize()
 
 	_price_min = -PRICE_MAX;
 
-	_cut_off_factor = CUT_OFF_COEF * pow( (double)_n, CUT_OFF_POWER);
+	_cut_off_factor = CUT_OFF_COEF * std::pow( _n, CUT_OFF_POWER);
 
 	_cut_off_factor = MAX( _cut_off_factor, CUT_OFF_MIN);
 
@@ -1273,7 +1273,7 @@ int MCMF_CS2::update_epsilon()
 	// decrease epsilon after epsilon-optimal flow is constructed;
 	if ( _epsilon <= 1 ) return ( 1 );
 
-	_epsilon = (price_t) (ceil ( (double) _epsilon / _f_scale ));
+	_epsilon = (price_t) (std::ceil ( _epsilon / _f_scale ));
 	_cut_off = _cut_off_factor * _epsilon;
 	_cut_on = _cut_off * CUT_OFF_GAP;
 
@@ -1411,9 +1411,9 @@ void MCMF_CS2::cs_cost_reinit()
 		sum += minc;
 	}
 
-	_epsilon = ceil(sum / _dn);
+	_epsilon = std::ceil(sum / _dn);
 
-	_cut_off_factor = CUT_OFF_COEF * pow((double)_n, CUT_OFF_POWER);
+	_cut_off_factor = CUT_OFF_COEF * std::pow(_n, CUT_OFF_POWER);
 
 	_cut_off_factor = MAX( _cut_off_factor, CUT_OFF_MIN);
 
