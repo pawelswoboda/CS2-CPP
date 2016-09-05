@@ -50,3 +50,6 @@ script:
   - cmake . -DBUILD_TESTS=ON -DDOWNLOAD_TEST_DEPENDENCIES=ON 
   - make VERBOSE=1
   - cd test && ctest
+
+notifications:
+   email: false

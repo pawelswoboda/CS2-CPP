@@ -17,9 +17,9 @@
 #ifndef _MCMF_H_
 #define _MCMF_H_
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
+//#include <stdio.h>
+//#include <stdlib.h>
+//#include <math.h>
 #include <assert.h>
 
 #include <algorithm>

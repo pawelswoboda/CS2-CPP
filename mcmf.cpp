@@ -385,7 +385,7 @@ void MCMF_CS2::cs2_initialize()
 	}
 
 	if ((double) _max_cost * (double) _dn > MAX_64) {
-		printf("Warning:  Arc lengths too large, overflow possible\n");
+      std::cout << "Warning:  Arc lengths too large, overflow possible\n";
 	}
 	_mmc = _max_cost * _dn;
 
@@ -1436,17 +1436,17 @@ void MCMF_CS2::cs2_cost_restart( double *objective_cost)
 
 	int cc; // for storing return code;
 
-	printf("c \nc ******************************\n");
-	printf("c Restarting after a cost update\n");
-	printf("c ******************************\nc\n");
+   std::cout << "c \nc ******************************\n";
+   std::cout << "c Restarting after a cost update\n";
+   std::cout << "c ******************************\nc\n";
 
 	cs_cost_reinit();
   
-	printf ("c Init. epsilon = %6.0f\n", _epsilon);
+   std::cout << "c Init. epsilon = %6.0f" << _epsilon << "\n";
 	cc = update_epsilon();
   
 	if (cc != 0) {
-		printf("c Old solution is optimal\n");
+      std::cout << "c Old solution is optimal\n";
 	} 
 	else {
 		do { // scaling loop
@@ -1522,11 +1522,11 @@ void MCMF_CS2::print_solution()
 			cost = MIN(cost, i->price());
 		}
 		for ( i = _nodes.get(); i != _sentinel_node; i ++) {
-			printf("p %7ld %7.2lld\n", N_NODE(i), i->price() - cost);
+         std::cout << "p " << N_NODE(i) << " " << i->price() - cost << "\n";
 		}
 	}
 
-	printf("c\n");
+   std::cout << "c\n";
 }
 
 void MCMF_CS2::print_graph()
@@ -1534,14 +1534,13 @@ void MCMF_CS2::print_graph()
 	NODE *i;
 	ARC *a;
 	long ni, na;
-	printf ("\nGraph: %d\n", _n);
+   std::cout << "\nGraph: " << _n << "\n";
 	for ( i = _nodes.get(); i < _nodes.get() + _n; i ++ ) {
 		ni = N_NODE( i );
-		printf("\nNode %d", ni);
+      std::cout << "\nNode " << ni << "\n";
 		for ( a = i->suspended(); a != (i+1)->suspended(); a ++) {
 			na = N_ARC( a );
-			printf("\n {%d} %d -> %d  cap: %d  cost: %d", na,
-				ni, N_NODE(a->head()), _cap[N_ARC(a)], a->cost());
+         std::cout << "\n {" << na << "} " << ni << " -> " <<  N_NODE(a->head()) << " cap: " << _cap[N_ARC(a)] << " cost: " << a->cost() << "\n";
       }
     }
 }
@@ -1676,38 +1675,36 @@ long long int MCMF_CS2::run_cs2()
 	cs2_initialize(); // works already with 2*m;
 	print_graph(); // exit(1); // debug;
 
-	printf("\nc CS 4.3\n");
-	printf("c nodes: %ld  arcs: %ld\n", _n, _m/2 );
-	printf("c scale-factor: %f  cut-off-factor: %f\nc\n",
-		   _f_scale, _cut_off_factor);
+   std::cout << "\nc CS 4.3\n";
+   std::cout << "c nodes: " << _n << " arcs: " << _m/2 << "\n";
+   std::cout << "c scale-factor: " << _f_scale << " cut-off-factor: " << _cut_off_factor << "\nc\n",
 
 	
 	// (6) run CS2;
 	cs2( &objective_cost );
 	double t = 0.0;
   
-	printf("c time:         %15.2f    cost:       %15.0f\n", t, objective_cost);
-	printf("c refines:      %10ld     discharges: %10ld\n", _n_refine, _n_discharge);
-	printf("c pushes:       %10ld     relabels:   %10ld\n", _n_push, _n_relabel);
-	printf("c updates:      %10ld     u-scans:    %10ld\n", _n_update, _n_scan);
-	printf("c p-refines:    %10ld     r-scans:    %10ld\n", _n_prefine, _n_prscan);
-	printf("c dfs-scans:    %10ld     bad-in:     %4ld  + %2ld\n",
-		   _n_prscan1, _n_bad_pricein, _n_bad_relabel);
+   std::cout << "c time:         " << t << "    cost:       " << objective_cost << "\n";
+	std::cout << "c refines:      " << _n_refine << "     discharges: " << _n_discharge << "\n";
+	std::cout << "c pushes:       " << _n_push << "     relabels:   " << _n_relabel << "\n";
+	std::cout << "c updates:      " << _n_update << "     u-scans:    " << _n_scan << "\n";
+	std::cout << "c p-refines:    " << _n_prefine << "     r-scans:    " << _n_prscan << "\n";
+	std::cout << "c dfs-scans:    " << _n_prscan1 << "     bad-in:     " << _n_bad_pricein << "  + " << _n_bad_relabel << "\n";
   
 
 	// () CHECK_SOLUTION?
 	if ( _check_solution == true ) {
-		printf("c checking feasibility...\n"); 
+		std::cout << "c checking feasibility...\n"; 
 		if ( check_feas() )
-			printf("c ...OK\n");
+			std::cout << "c ...OK\n";
 		else
-			printf("c ERROR: solution infeasible\n");
-		printf("c computing prices and checking CS...\n");
+			std::cout << "c ERROR: solution infeasible\n";
+		std::cout << "c computing prices and checking CS...\n";
 		compute_prices();
 		if ( check_cs() )
-			printf("c ...OK\n");
+			std::cout << "c ...OK\n";
 		else
-			printf("ERROR: CS violation\n");
+			std::cout << "ERROR: CS violation\n";
 	}
 
 	// () PRINT_ANS?
