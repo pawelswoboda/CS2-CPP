@@ -14,15 +14,14 @@ matrix:
 
       - os: linux
    compiler: gcc-5.4
-   script:
-      - cmake . -DUSE_SUPERBUILD=ON -DBUILD_TESTS=ON
-      - make 
-      - cd test && ctest
 
       - os: osx
    compiler: clang
-   script:
-      - cmake . -DUSE_SUPERBUILD=ON -DBUILD_TESTS=ON
-      - make 
-      - cd test && ctest
+
+
+
+script:
+   - cmake . -DUSE_SUPERBUILD=ON -DBUILD_TESTS=ON
+   - make 
+   - cd test && ctest
 
