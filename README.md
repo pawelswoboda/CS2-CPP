@@ -3,7 +3,7 @@ C++ implementation of the CS2 minimum cost flow algorithm of Andrew Goldberg and
 
 [![Build Status](https://travis-ci.org/pawelswoboda/CS2-CPP.png?branch=master)](https://travis-ci.org/pawelswoboda/CS2-CPP)
 
-** Summary **
+**Summary**
 
 This is a port of the famous cost scaling algorithm for minimum cost flow.
 For a detailed description, see:
@@ -14,7 +14,7 @@ CS2 was developed by Andrew Goldberg (goldberg@intertrust.com) and
 Boris Cherkassky (cher@cher.msk.su).
 
 
-** COPYRIGHT **
+**COPYRIGHT**
 
 The original copyright notice of the C version applies to this C++
 version.
