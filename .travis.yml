@@ -19,6 +19,7 @@ matrix:
       addons:
         apt:
           packages:
+            - g++-5
             - clang-3.8
           sources: *sources
 
