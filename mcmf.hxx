@@ -1,4 +1,14 @@
-#include "mcmf.h"
+#ifndef _MCMF_H_
+#define _MCMF_H_
+
+#include <cmath>
+#include <assert.h>
+
+#include <algorithm>
+#include <iostream>
+#include <memory>
+#include <string.h>
+#include <chrono>
 
 namespace CS2_CPP {
 
@@ -7,6 +17,450 @@ namespace CS2_CPP {
 // MCMF_CS2
 //
 ////////////////////////////////////////////////////////////////////////////////
+
+template<typename COST_TYPE = long long int, typename CAPACITY_TYPE = long int>
+class MCMF_CS2
+{
+protected:
+   constexpr static long MAX_64  = 0x7fffffffffffffffLL;
+   constexpr static long MAX_32 = 0x7fffffff;
+   constexpr static long PRICE_MAX = MAX_64;
+
+   // parameters
+   constexpr static double UPDT_FREQ = 0.4;
+   constexpr static long UPDT_FREQ_S = 30;
+   constexpr static double SCALE_DEFAULT = 12.0;
+   // PRICE_OUT_START may not be less than 1
+   constexpr static long PRICE_OUT_START = 1;
+   constexpr static double CUT_OFF_POWER = 0.44;
+   constexpr static double CUT_OFF_COEF = 1.5;
+   constexpr static double CUT_OFF_POWER2 = 0.75;
+   constexpr static double CUT_OFF_COEF2 = 1;
+   constexpr static double CUT_OFF_GAP = 0.8;
+   constexpr static double CUT_OFF_MIN = 12;
+   constexpr static double CUT_OFF_INCREASE = 4;
+
+   constexpr static long TIME_FOR_PRICE_IN1 = 2;
+   constexpr static long TIME_FOR_PRICE_IN2 = 4;
+   constexpr static long TIME_FOR_PRICE_IN3 = 6;
+
+   constexpr static long MAX_CYCLES_CANCELLED = 0;
+   constexpr static long START_CYCLE_CANCEL = 100;
+
+ public:
+	typedef long long int excess_t;
+	typedef long long int price_t;
+
+	class NODE;
+	
+	class ARC {
+	public:
+		long _rez_capacity; // residual capacity;
+		price_t _cost; // cost of arc;
+		NODE *_head; // head node;
+		ARC *_sister; // opposite arc;
+	public:
+		ARC() {}
+		~ARC() {}
+
+		void set_rez_capacity( long rez_capacity) { _rez_capacity = rez_capacity; }
+		void dec_rez_capacity( long delta) { _rez_capacity -= delta; }
+		void inc_rez_capacity( long delta) { _rez_capacity += delta; }
+		void set_cost( price_t cost) { _cost = cost; }
+		void multiply_cost( price_t mult) { _cost *= mult; }
+		void set_head( NODE *head) { _head = head; }
+		void set_sister( ARC *sister) { _sister = sister; }
+		long rez_capacity() { return _rez_capacity; }
+		price_t cost() { return _cost; }
+		NODE *head() { return _head; }
+		ARC *sister() { return _sister; }
+	};
+
+	class NODE {
+	public:
+		excess_t _excess; // excess of the node;
+		price_t _price; // distance from a sink;
+		ARC *_first; // first outgoing arc;
+		ARC *_current; // current outgoing arc;
+		ARC *_suspended;
+		NODE *_q_next; // next node in push queue
+		NODE *_b_next; // next node in bucket-list;
+		NODE *_b_prev; // previous node in bucket-list;
+		long _rank; // bucket number;
+		long _inp; // auxilary field;
+	public:
+		NODE() {}
+      ~NODE() {}
+
+		void set_excess( excess_t excess) { _excess = excess; }
+		void dec_excess( long delta) { _excess -= delta; }
+		void inc_excess( long delta) { _excess += delta; }
+		void set_price( price_t price) { _price = price; }
+		void dec_price( long delta) { _price -= delta; }
+		void set_first( ARC *first) { _first = first; }
+		void set_current( ARC *current) { _current = current; }
+		void inc_current() { _current ++; }
+		void set_suspended( ARC *suspended) { _suspended = suspended; }
+		void set_q_next( NODE *q_next) { _q_next = q_next; }
+		void set_b_next( NODE *b_next) { _b_next = b_next; }
+		void set_b_prev( NODE *b_prev) { _b_prev = b_prev; }
+		void set_rank( long rank) { _rank = rank; }
+		void set_inp( long inp) { _inp = inp; }
+		excess_t excess() { return _excess; }
+		price_t price() { return _price; }
+		ARC *first() { return _first; }
+		void dec_first() { _first --; }
+		void inc_first() { _first ++; }
+		ARC *current() { return _current; }
+		ARC *suspended() { return _suspended; }
+		NODE *q_next() { return _q_next; }
+		NODE *b_next() { return _b_next; }
+		NODE *b_prev() { return _b_prev; }
+		long rank() { return _rank; }
+		long inp() { return _inp; }
+	};
+ 
+	class BUCKET {
+	private:
+		// 1st node with positive excess or simply 1st node in the buket;
+		NODE *_p_first;
+	public:
+	BUCKET( NODE *p_first) : _p_first(p_first) {}
+		BUCKET() {}
+		~BUCKET() {}
+
+		void set_p_first( NODE *p_first) { _p_first = p_first; }
+		NODE *p_first() { return _p_first; }
+	};
+
+ public:
+	long _n; // number of nodes
+	long _m; // number of arcs
+
+   // counters for operations.
+   long _n_rel; // number of relabels from last price update
+   long _n_ref; // current number of refines
+   long _n_src; // current number of nodes with excess
+   long _n_bad_pricein;
+   long _n_bad_relabel;
+
+   std::unique_ptr<long[]> _cap;
+	//long *_cap; // array containig capacities
+	//NODE *_nodes; // array of nodes
+   std::unique_ptr<NODE[]> _nodes; // array of nodes
+	NODE *_sentinel_node; // next after last
+	NODE *_excq_first; // first node in push-queue
+	NODE *_excq_last; // last node in push-queue
+	//ARC *_arcs; // array of arcs
+   std::unique_ptr<ARC[]> _arcs;
+	ARC *_sentinel_arc; // next after last
+
+	//BUCKET *_buckets; // array of buckets
+   std::unique_ptr<BUCKET[]> _buckets; // array of buckets
+	BUCKET *_l_bucket; // last bucket
+	long _linf; // number of l_bucket + 1
+	int _time_for_price_in;
+
+	price_t _epsilon; // quality measure
+	price_t _dn; // cost multiplier = number of nodes + 1
+	price_t _price_min; // lowest bound for prices
+	price_t _mmc; // multiplied maximal cost
+	double _f_scale; // scale factor
+	double _cut_off_factor; // multiplier to produce cut_on and cut_off from n and epsilon
+	double _cut_on; // the bound for returning suspended arcs
+	double _cut_off; // the bound for suspending arcs
+	excess_t _total_excess; // total excess
+
+	// if = 1 - signal to start price-in ASAP - 
+	// maybe there is infeasibility because of susoended arcs 
+	int _flag_price;
+	// if = 1 - update failed some sources are unreachable: either the 
+	// problem is unfeasible or you have to return suspended arcs
+	int _flag_updt;
+	// maximal number of cycles cancelled during price refine 
+	int _snc_max;
+
+	// dummy variables;
+	ARC _d_arc; // dummy arc - for technical reasons
+	NODE _d_node; // dummy node - for technical reasons
+	NODE *_dummy_node; // the address of d_node
+	NODE *_dnode;
+
+	// sketch variables used during reading in arcs;
+	long _node_min; // minimal no of nodes
+	long _node_max; // maximal no of nodes
+   std::unique_ptr<long[]> _arc_first; // internal array for holding
+                     // - node degree
+                     // - position of the first outgoing arc
+	std::unique_ptr<long[]> _arc_tail; // internal array: tails of the arcs
+	long _pos_current;
+	ARC *_arc_current;
+	ARC *_arc_new;
+	ARC *_arc_tmp;
+	price_t _max_cost; // maximum cost
+	excess_t _total_p; // total supply
+	excess_t _total_n; // total demand
+	// pointers to the node structure
+	NODE *_i_node;
+	NODE *_j_node;
+
+
+ public:
+	MCMF_CS2( long num_nodes, long num_arcs) {
+		_n = num_nodes;
+		_m = num_arcs;
+
+      _n_bad_pricein = 0;
+      _n_bad_relabel = 0;
+
+		_flag_price = 0;
+		_flag_updt = 0;
+      // allocate arrays and prepare for "receiving" arcs;
+		// will also reset _pos_current, etc.;
+		allocate_arrays();
+	}
+	~MCMF_CS2() {
+      deallocate_arrays();
+   }
+
+	void err_end( int cc);
+	void allocate_arrays();
+	void deallocate_arrays();
+	void set_arc( long tail_node_id, long head_node_id,
+				  long low_bound, long up_bound, price_t cost);
+	void set_supply_demand_of_node( long id, long excess);
+	void pre_processing();
+	void cs2_initialize();
+	void up_node_scan( NODE *i);
+	void price_update();
+	int relabel( NODE *i);
+	void discharge( NODE *i);
+	int price_in();
+	void refine();
+	int price_refine();
+	void compute_prices();
+	void price_out();
+	int update_epsilon();
+	void init_solution();
+	void cs_cost_reinit();
+	long long int cs2_cost_restart();
+	void finishup( double *objective_cost);
+	void cs2( double *objective_cost);
+	price_t run_cs2();
+
+   void init() { pre_processing(); } // needs to be called after adding all edges
+
+   // information functions
+   long no_nodes() const { return _n; }
+   long no_arcs() const { return 2*_m; }
+   price_t compute_objective_cost() const;
+   long get_arc_tail(const long arc_id) const { return N_NODE(_arcs[arc_id].sister()->head()); }
+   long get_arc_head(const long arc_id) const { return N_NODE(_arcs[arc_id].head()); }
+   long get_flow(const long arc_id) const { return _cap[arc_id] - _arcs[arc_id].rez_capacity(); }
+   long get_residual_flow(const long arc_id) const { return _arcs[arc_id].rez_capacity(); } // original flow i capacity - residual flow
+   long get_cost(const long arc_id) const { return _arcs[arc_id].cost(); }
+   long get_reduced_cost(const long arc_id) const { return get_cost(arc_id) + get_price(get_arc_tail(arc_id)) - get_price(get_arc_head(arc_id)); }
+   long get_price(const long node_id) const { return _nodes[node_id].price(); }
+   void update_cost(const long arc_id, const price_t cost) { 
+      _arcs[arc_id].set_cost(cost);
+      _arcs[arc_id].sister()->set_cost(-cost);
+   }
+   void set_cap(const long arc_id, const long cap) { assert(cap >= 0); _cap[arc_id] = cap; }
+
+   //#define N_NODE( i ) ( ( (i) == NULL ) ? -1 : ( (i) - _nodes + _node_min ) )
+   long N_NODE(NODE* n) const { return n - _nodes.get() + _node_min; }
+   //#define N_ARC( a ) ( ( (a) == NULL )? -1 : (a) - _arcs )
+   long N_ARC(ARC* a) const { return a - _arcs.get(); }
+
+ 
+
+	// shared utils;
+	void increase_flow( NODE *i, NODE *j, ARC *a, long df) {
+		i->dec_excess( df);
+		j->inc_excess( df);
+		a->dec_rez_capacity( df);
+		a->sister()->inc_rez_capacity( df);
+	}
+	bool time_for_update() { 
+		return ( _n_rel > _n * UPDT_FREQ + _n_src * UPDT_FREQ_S); 
+	}
+	// utils for excess queue;
+	void reset_excess_q() {
+		for ( ; _excq_first != NULL; _excq_first = _excq_last ) {
+			_excq_last = _excq_first->q_next();
+			_excq_first->set_q_next( _sentinel_node);
+		}
+	}
+	bool out_of_excess_q( NODE *i) { return ( i->q_next() == _sentinel_node); }
+	bool empty_excess_q() { return ( _excq_first == NULL); }
+	bool nonempty_excess_q() { return ( _excq_first != NULL); }
+	void insert_to_excess_q( NODE *i) {
+		if ( nonempty_excess_q() ) {
+			_excq_last->set_q_next( i);
+		} else {
+			_excq_first = i;
+		}
+		i->set_q_next( NULL);
+		_excq_last = i;
+	}
+	void insert_to_front_excess_q( NODE *i) {
+		if ( empty_excess_q() ) {
+			_excq_last = i;
+		}
+		i->set_q_next( _excq_first);
+		_excq_first = i;
+	}
+	void remove_from_excess_q( NODE *i) {
+		i = _excq_first;
+		_excq_first = i->q_next();
+		i->set_q_next( _sentinel_node);
+	}
+	// utils for excess queue as a stack;
+	bool empty_stackq() { return empty_excess_q(); }
+	bool nonempty_stackq() { return nonempty_excess_q(); }
+	void reset_stackq() { reset_excess_q(); }
+	void stackq_push( NODE *i) {
+		i->set_q_next( _excq_first);
+		_excq_first = i;
+	}
+	void stackq_pop( NODE *i) {
+		remove_from_excess_q( i);
+	}
+	// utils for buckets;
+	void reset_bucket( BUCKET *b) { b->set_p_first( _dnode); }
+	bool nonempty_bucket( BUCKET *b) { return ( (b->p_first()) != _dnode); }
+	void insert_to_bucket( NODE *i, BUCKET *b) {
+		i->set_b_next( b->p_first() );
+		b->p_first()->set_b_prev( i);
+		b->set_p_first( i);
+	}
+	void get_from_bucket( NODE *i, BUCKET *b) {
+		i = b->p_first();
+		b->set_p_first( i->b_next());
+	}
+	void remove_from_bucket( NODE *i, BUCKET *b) {
+		if ( i == b->p_first() ) {
+			b->set_p_first( i->b_next());
+		} else {
+			i->b_prev()->set_b_next( i->b_next());
+			i->b_next()->set_b_prev( i->b_prev());
+		}
+	}
+	// misc utils;
+	void update_cut_off() {
+		if ( _n_bad_pricein + _n_bad_relabel == 0) {
+			_cut_off_factor = CUT_OFF_COEF2 * std::pow( _n, CUT_OFF_POWER2 );
+			_cut_off_factor = std::max ( _cut_off_factor, double(CUT_OFF_MIN) );
+			_cut_off = _cut_off_factor * _epsilon;
+			_cut_on = _cut_off * CUT_OFF_GAP;
+		} else {
+			_cut_off_factor *= CUT_OFF_INCREASE;
+			_cut_off = _cut_off_factor * _epsilon;
+			_cut_on = _cut_off * CUT_OFF_GAP;
+		}
+	}
+	void exchange( ARC *a, ARC *b) {
+		if ( a != b) {
+			ARC *sa = a->sister();
+			ARC *sb = b->sister();
+			long d_cap;						
+
+			_d_arc.set_rez_capacity( a->rez_capacity());
+			_d_arc.set_cost( a->cost());
+			_d_arc.set_head( a->head());
+
+			a->set_rez_capacity( b->rez_capacity());
+			a->set_cost( b->cost());
+			a->set_head( b->head());
+
+			b->set_rez_capacity( _d_arc.rez_capacity());
+			b->set_cost( _d_arc.cost());
+			b->set_head( _d_arc.head());
+
+			if ( a != sb) {			
+				b->set_sister( sa);
+				a->set_sister( sb);
+				sa->set_sister( b);
+				sb->set_sister( a);
+			}
+						
+			d_cap = _cap[N_ARC(a)];
+			_cap[N_ARC(a)] = _cap[N_ARC(b)];
+			_cap[N_ARC(b)] = d_cap;	
+		}
+	}
+};
+
+// class 
+// - counting how many operations were performed 
+// - checking feasibility of solutions after optimization 
+// - printing diagnostics and statistics after optimization
+// - printing graph and obtained flow
+template<typename COST_TYPE = long long int, typename CAPACITY_TYPE = long int>
+class MCMF_CS2_STAT : public MCMF_CS2<COST_TYPE, CAPACITY_TYPE> {
+public:
+   MCMF_CS2_STAT( long num_nodes, long num_arcs) 
+      : MCMF_CS2(num_nodes, num_arcs)
+        /*
+        ,
+      _n_push(0),
+      _n_relabel(0),
+      _n_discharge(0),
+      _n_refine(0),
+      _n_update(0),
+      _n_scan(0),
+      _n_prscan(0),
+      _n_prscan1(0),
+      _n_prscan2(0),
+      _n_prefine(0),
+      _no_zero_cycles(false),
+      _check_solution(false),
+      _comp_duals(false),
+      _cost_restart(false),
+      _print_ans(true)
+      */
+   {}
+
+   long long int run_cs2();
+
+	void print_solution();
+	void print_graph();
+
+	int check_feas();
+	int check_cs();
+	int check_eps_opt();
+
+private:
+   /*
+   long _n_push;
+   long _n_relabel;
+   long _n_discharge;
+   long _n_refine;
+   long _n_update;
+   long _n_scan;
+   long _n_prscan;
+   long _n_prscan1;
+   long _n_prscan2;
+   long _n_prefine;
+   */
+
+   /*
+   bool _no_zero_cycles; // finds an optimal flow with no zero-cost cycles
+   bool _check_solution; // check feasibility/optimality. HIGH OVERHEAD!
+   bool _comp_duals; // compute prices?
+   bool _cost_restart; // to be able to restart after a cost function change -> should go to main class or be deleted
+	bool _print_ans;
+	long long int *_node_balance;
+   */
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+// Implementation
+//
+////////////////////////////////////////////////////////////////////////////////
+
 
 #define WHITE 0
 #define GREY  1
@@ -50,8 +504,8 @@ namespace CS2_CPP {
 	}
 
 
-
-void MCMF_CS2::allocate_arrays()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::allocate_arrays()
 {
 	// (1) allocate memory for 'nodes', 'arcs' and internal arrays;
 
@@ -91,7 +545,8 @@ void MCMF_CS2::allocate_arrays()
 	// by using set_arc()...
 }
 
-void MCMF_CS2::deallocate_arrays()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::deallocate_arrays()
 { 
 	//if ( _arcs) free ( _arcs );
 	if ( _dnode) delete _dnode;
@@ -104,7 +559,8 @@ void MCMF_CS2::deallocate_arrays()
    //}
 }
 
-void MCMF_CS2::set_arc( long tail_node_id, long head_node_id,
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::set_arc( long tail_node_id, long head_node_id,
 						long low_bound, long up_bound, // up_bound is basically capacity;
 						price_t cost)
 {
@@ -161,7 +617,8 @@ void MCMF_CS2::set_arc( long tail_node_id, long head_node_id,
 	_pos_current += 2;
 }
 
-void MCMF_CS2::set_supply_demand_of_node( long id, long excess)
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::set_supply_demand_of_node( long id, long excess)
 {
 	// set supply and demand of nodes; not used for transhipment nodes;
 	if ( id < 0 || id > _n ) {
@@ -172,7 +629,8 @@ void MCMF_CS2::set_supply_demand_of_node( long id, long excess)
 	if ( excess < 0) _total_n -= excess;
 }
 
-void MCMF_CS2::pre_processing()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::pre_processing()
 {
 	// called after the arcs were just added and before run_cs2();
 	// ordering arcs - linear time algorithm;
@@ -330,7 +788,8 @@ void MCMF_CS2::pre_processing()
 	//free ( _arc_tail );
 }
 
-void MCMF_CS2::cs2_initialize()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::cs2_initialize()
 {
 	// initialization; 
 	// called after allocate_arrays() and all nodes and arcs have been inputed;
@@ -425,7 +884,8 @@ void MCMF_CS2::cs2_initialize()
 	//print_graph(); // debug;
 }
 
-void MCMF_CS2::up_node_scan( NODE *i)
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::up_node_scan( NODE *i)
 {
 	NODE *j; // opposite node
 	ARC *a; // (i, j)
@@ -478,7 +938,8 @@ void MCMF_CS2::up_node_scan( NODE *i)
 	i->set_rank( -1);
 }
 
-void MCMF_CS2::price_update()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::price_update()
 {
 	NODE *i;
 	excess_t remain;
@@ -533,7 +994,8 @@ void MCMF_CS2::price_update()
 	}
 }
 
-int MCMF_CS2::relabel( NODE *i)
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+int MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::relabel( NODE *i)
 {
 	ARC *a; // current arc from i
 	ARC *a_stop; // first arc from the next node
@@ -597,7 +1059,8 @@ int MCMF_CS2::relabel( NODE *i)
 	return ( 0);
 }
 
-void MCMF_CS2::discharge( NODE *i)
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::discharge( NODE *i)
 {
 	ARC *a;// an arc from i
 	NODE *j; // head of a
@@ -656,7 +1119,8 @@ void MCMF_CS2::discharge( NODE *i)
 	i->set_current( a);
 }
 
-int MCMF_CS2::price_in()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+int MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::price_in()
 {
 	NODE *i; // current node
 	NODE *j;
@@ -747,7 +1211,8 @@ int MCMF_CS2::price_in()
 	return ( n_in_bad);
 }
 
-void MCMF_CS2::refine()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::refine()
 {
 	NODE *i; // current node
 	excess_t i_exc; // excess of i
@@ -838,7 +1303,8 @@ void MCMF_CS2::refine()
 	return;
 }
 
-int MCMF_CS2::price_refine()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+int MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::price_refine()
 {
 	NODE *i; // current node
 	NODE *j; // opposite node
@@ -1067,7 +1533,8 @@ int MCMF_CS2::price_refine()
 	return ( cc );
 }
 
-void MCMF_CS2::compute_prices()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::compute_prices()
 {
 	NODE *i; // current node
 	NODE *j; // opposite node
@@ -1222,7 +1689,8 @@ void MCMF_CS2::compute_prices()
 	} // end of main loop
 } 
 
-void MCMF_CS2::price_out()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::price_out()
 {
 	NODE *i; // current node
 	ARC *a; // current arc from i 
@@ -1248,7 +1716,8 @@ void MCMF_CS2::price_out()
 	}
 }
 
-int MCMF_CS2::update_epsilon()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+int MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::update_epsilon()
 {
 	// decrease epsilon after epsilon-optimal flow is constructed;
 	if ( _epsilon <= 1 ) return ( 1 );
@@ -1263,7 +1732,8 @@ int MCMF_CS2::update_epsilon()
 
 
 
-void MCMF_CS2::init_solution()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::init_solution()
 {
 	ARC *a; // current arc (i,j)
 	NODE *i; // tail of a
@@ -1280,7 +1750,8 @@ void MCMF_CS2::init_solution()
 	}
 }
 
-void MCMF_CS2::cs_cost_reinit()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::cs_cost_reinit()
 {
 	//if ( _cost_restart == false)
 	//	return;
@@ -1339,7 +1810,8 @@ void MCMF_CS2::cs_cost_reinit()
 	_excq_first = NULL;
 }
 
-long long int MCMF_CS2::cs2_cost_restart()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+long long <COST_TYPE,CAPACITY_TYPE>int MCMF_CS2::cs2_cost_restart()
 {
 	// restart after a cost update;
 	//if ( _cost_restart == false)
@@ -1387,7 +1859,8 @@ long long int MCMF_CS2::cs2_cost_restart()
    return objective_cost;
 }
 
-long long int MCMF_CS2::compute_objective_cost() const
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+long long <COST_TYPE,CAPACITY_TYPE>int MCMF_CS2::compute_objective_cost() const
 {
    double obj = 0;
    int na;
@@ -1404,7 +1877,8 @@ long long int MCMF_CS2::compute_objective_cost() const
 
 
 
-void MCMF_CS2::finishup( double *objective_cost)
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::finishup( double *objective_cost)
 {
 	ARC *a; // current arc
 	long na; // corresponding position in capacity array
@@ -1444,7 +1918,8 @@ void MCMF_CS2::finishup( double *objective_cost)
 	*objective_cost = obj_internal;
 }
 
-void MCMF_CS2::cs2( double *objective_cost)
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::cs2( double *objective_cost)
 {
 	// the main calling function;
 	int cc = 0; // for storing return code;
@@ -1480,7 +1955,8 @@ void MCMF_CS2::cs2( double *objective_cost)
 	finishup( objective_cost );
 }
 
-long long int MCMF_CS2::run_cs2()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+long long <COST_TYPE,CAPACITY_TYPE>int MCMF_CS2::run_cs2()
 {
 	// example of flow network in DIMACS format:
 	//
@@ -1539,7 +2015,8 @@ long long int MCMF_CS2::run_cs2()
    return objective_cost;
 }
 
-long long int MCMF_CS2_STAT::run_cs2()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+long long <COST_TYPE,CAPACITY_TYPE>int MCMF_CS2_STAT::run_cs2()
 {
 	print_graph(); // exit(1); // debug;
 
@@ -1578,7 +2055,8 @@ long long int MCMF_CS2_STAT::run_cs2()
    return obj;
 }
 
-void MCMF_CS2_STAT::print_solution()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::print_solution()
 {
    for(ARC* a=_arcs.get(); a<_arcs.get()+_m*2; ++a) {
       std::cout << N_NODE(a->sister()->head()) << "->" << N_NODE(a->head()) << ": flow = " << a->rez_capacity()  - _cap[N_ARC(a)] << "\n";
@@ -1613,7 +2091,8 @@ void MCMF_CS2_STAT::print_solution()
    std::cout << "c\n";
 }
 
-void MCMF_CS2_STAT::print_graph()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+void MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::print_graph()
 {
 	NODE *i;
 	ARC *a;
@@ -1629,7 +2108,8 @@ void MCMF_CS2_STAT::print_graph()
     }
 }
 
-int MCMF_CS2_STAT::check_feas()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+int MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::check_feas()
 {
    return 0;
 	
@@ -1664,7 +2144,8 @@ int MCMF_CS2_STAT::check_feas()
    */
 }
 
-int MCMF_CS2_STAT::check_cs()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+int MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::check_cs()
 {
 	// check complimentary slackness;
 	NODE *i;
@@ -1681,7 +2162,8 @@ int MCMF_CS2_STAT::check_cs()
 	return(1);
 }
 
-int MCMF_CS2_STAT::check_eps_opt()
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+int MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::check_eps_opt()
 {
 	NODE *i;
 	ARC *a, *a_stop;
@@ -1699,3 +2181,5 @@ int MCMF_CS2_STAT::check_eps_opt()
 
 
 } // end namespace CS2_CPP
+
+#endif

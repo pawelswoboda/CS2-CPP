@@ -53,8 +53,8 @@ if(BUILD_TESTS)
 endif()
 
 project(CS2_CPP)
-add_library(CS2_CPP STATIC
-   mcmf.cpp mcmf.h)
+#add_library(CS2_CPP STATIC
+#   mcmf.cpp mcmf.h)
 
 add_subdirectory(test)
 

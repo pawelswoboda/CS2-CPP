@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "../mcmf.h"
+#include "../mcmf.hxx"
 
 using namespace CS2_CPP;
 
