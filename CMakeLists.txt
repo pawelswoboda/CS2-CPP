@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.8.12)
 
 # C++11
 add_compile_options(-std=c++14)
+
 #SET(C++_STD_FLAG "c++14")
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${C++_STD_FLAG}")
 #MARK_AS_ADVANCED(C++_STD_FLAG)
@@ -10,6 +11,8 @@ add_compile_options(-std=c++14)
 add_definitions(-DIL_STD)
 add_definitions(-ffast-math)
 add_definitions(-march=native)
+#add_definitions(-libc++)
+add_definitions(-libstdc++)
 
 option(BUILD_TESTS "build tests" OFF)
 
@@ -52,6 +55,6 @@ endif()
 project(CS2_CPP)
 add_library(CS2_CPP STATIC
    mcmf.cpp mcmf.h)
-add_subdirectory(test)
 
+add_subdirectory(test)
 

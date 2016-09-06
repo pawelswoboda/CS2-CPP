@@ -1,5 +1,6 @@
 #include "mcmf.h"
 #include <string.h>
+#include <chrono>
 
 namespace CS2_CPP {
 
@@ -188,7 +189,7 @@ void MCMF_CS2::pre_processing()
 	excess_t cap_out; // sum of outgoing capacities
 	excess_t cap_in; // sum of incoming capacities
 
-	if ( ABS( _total_p - _total_n ) > 0.5 ) {
+	if ( std::abs( _total_p - _total_n ) > 0.5 ) {
       throw std::runtime_error("Error:  Unbalanced problem inside CS2\n");
 	}
 	
@@ -367,22 +368,22 @@ void MCMF_CS2::cs2_initialize()
 	}
 
 	_dn = _n + 1;
-	if ( _no_zero_cycles == true) { // NO_ZERO_CYCLES
-		_dn = 2 * _dn;
-	}
+	//if ( _no_zero_cycles == true) { // NO_ZERO_CYCLES
+	//	_dn = 2 * _dn;
+	//}
 
 	for ( a = _arcs.get(); a != _sentinel_arc; a ++ ) {
 		a->multiply_cost( _dn);
 	}
 
-	if ( _no_zero_cycles == true) { // NO_ZERO_CYCLES
-		for ( a = _arcs.get(); a != _sentinel_arc; a ++ ) {
-			if ((a->cost() == 0) && (a->sister()->cost() == 0)) {
-				a->set_cost( 1);
-				a->sister()->set_cost( -1);
-			}
-		}
-	}
+	//if ( _no_zero_cycles == true) { // NO_ZERO_CYCLES
+	//	for ( a = _arcs.get(); a != _sentinel_arc; a ++ ) {
+	//		if ((a->cost() == 0) && (a->sister()->cost() == 0)) {
+	//			a->set_cost( 1);
+	//			a->sister()->set_cost( -1);
+	//		}
+	//	}
+	//}
 
 	if ((double) _max_cost * (double) _dn > MAX_64) {
       std::cout << "Warning:  Arc lengths too large, overflow possible\n";
@@ -413,7 +414,7 @@ void MCMF_CS2::cs2_initialize()
 
 	_cut_off_factor = CUT_OFF_COEF * std::pow( _n, CUT_OFF_POWER);
 
-	_cut_off_factor = MAX( _cut_off_factor, CUT_OFF_MIN);
+	_cut_off_factor = std::max( _cut_off_factor, double(CUT_OFF_MIN));
 
 	_n_ref = 0;
 
@@ -439,8 +440,6 @@ void MCMF_CS2::up_node_scan( NODE *i)
 	long j_new_rank;             
 	price_t rc; // reduced cost of (j, i)
 	price_t dr; // rank difference
-
-	_n_scan ++;
 
 	i_rank = i->rank();
 
@@ -483,13 +482,11 @@ void MCMF_CS2::up_node_scan( NODE *i)
 
 void MCMF_CS2::price_update()
 {
-	register NODE *i;
+	NODE *i;
 	excess_t remain;
 	// total excess of unscanned nodes with positive excess;
 	BUCKET *b; // current bucket;
 	price_t dp; // amount to be subtracted from prices;
-
-	_n_update ++;
 
 	for ( i = _nodes.get(); i != _sentinel_node; i ++ ) {
 		if ( i->excess() < 0 ) {
@@ -540,12 +537,12 @@ void MCMF_CS2::price_update()
 
 int MCMF_CS2::relabel( NODE *i)
 {
-	register ARC *a; // current arc from i
-	register ARC *a_stop; // first arc from the next node
-	register ARC *a_max; // arc which provides maximum price
-	register price_t p_max; // current maximal price
-	register price_t i_price; // price of node  i
-	register price_t dp; // current arc partial residual cost
+	ARC *a; // current arc from i
+	ARC *a_stop; // first arc from the next node
+	ARC *a_max; // arc which provides maximum price
+	price_t p_max; // current maximal price
+	price_t i_price; // price of node  i
+	price_t dp; // current arc partial residual cost
 
 	p_max = _price_min;
 	i_price = i->price();
@@ -598,19 +595,16 @@ int MCMF_CS2::relabel( NODE *i)
 		}
 	}
 
-	_n_relabel ++;
 	_n_rel ++;
 	return ( 0);
 }
 
 void MCMF_CS2::discharge( NODE *i)
 {
-	register ARC *a;// an arc from i
-	register NODE *j; // head of a
-	register long df; // amoumt of flow to be pushed through a
+	ARC *a;// an arc from i
+	NODE *j; // head of a
+	long df; // amoumt of flow to be pushed through a
 	excess_t j_exc; // former excess of j
-
-	_n_discharge ++;
 
 	a = i->current();
 	j = a->head();
@@ -626,10 +620,9 @@ void MCMF_CS2::discharge( NODE *i)
 		j_exc = j->excess();
 		if ( j_exc >= 0 ) {
 
-			df = MIN( i->excess(), a->rez_capacity() );
+			df = std::min( long(i->excess()), a->rez_capacity() );
 			if ( j_exc == 0) _n_src++;
 			increase_flow( i, j, a, df ); // INCREASE_FLOW 
-			_n_push ++;
 
 			if ( out_of_excess_q( j ) ) {
 				insert_to_excess_q( j );
@@ -637,9 +630,8 @@ void MCMF_CS2::discharge( NODE *i)
 		} 
 		else { // j_exc < 0;
 
-			df = MIN( i->excess(), a->rez_capacity() );
+			df = std::min( long(i->excess()), a->rez_capacity() );
 			increase_flow( i, j, a, df ); // INCREASE_FLOW 
-			_n_push ++;
 
 			if ( j->excess() >= 0 ) {
 				if ( j->excess() > 0 ) {
@@ -764,11 +756,10 @@ void MCMF_CS2::refine()
 	long np, nr, ns; // variables for additional print
 	int pr_in_int; // current number of updates between price_in
 
-	np = _n_push; 
-	nr = _n_relabel; 
-	ns = _n_scan;
+	//np = _n_push; 
+	//nr = _n_relabel; 
+	//ns = _n_scan;
 
-	_n_refine ++;
 	_n_ref ++;
 	_n_rel = 0;
 	pr_in_int = 0;
@@ -875,8 +866,6 @@ int MCMF_CS2::price_refine()
 	int nnc; // number of negative cycles cancelled during one iteration
 	int snc; // total number of negative cycle cancelled
 
-	_n_prefine ++;
-
 	cc = 1;
 	snc = 0;
 
@@ -962,7 +951,6 @@ int MCMF_CS2::price_refine()
 				if ( a == a_stop ) {
 					// step back 
 					i->set_inp( BLACK);
-					_n_prscan1 ++;
 					j = i->b_next();
 					stackq_push( i );
 					if ( j == NULL ) break;
@@ -984,7 +972,6 @@ int MCMF_CS2::price_refine()
 
 		while ( nonempty_stackq() ) {
 
-			_n_prscan2 ++;
 			STACKQ_POP( i );
 			i_rank = i->rank();
 			for ( a = i->first(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
@@ -1021,7 +1008,6 @@ int MCMF_CS2::price_refine()
 
 			while ( nonempty_bucket( b) ) {
 				GET_FROM_BUCKET( i, b );
-				_n_prscan ++;
 
 				for ( a = i->first(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
 					if ( OPEN( a ) ) {
@@ -1101,7 +1087,6 @@ void MCMF_CS2::compute_prices()
 	price_t dp;
 	int cc; // return code: 1 - flow is epsilon optimal 0 - refine is needed
 
-	_n_prefine ++;
 	cc = 1;
 
 	// (1) main loop
@@ -1148,7 +1133,6 @@ void MCMF_CS2::compute_prices()
 				if ( a == a_stop ) {
 					// step back
 					i->set_inp( BLACK);
-					_n_prscan1 ++;
 					j = i->b_next();
 					stackq_push( i );
 					if ( j == NULL ) break;
@@ -1167,7 +1151,6 @@ void MCMF_CS2::compute_prices()
 		bmax = 0;
 
 		while ( nonempty_stackq() ) {
-			_n_prscan2 ++;
 			STACKQ_POP( i );
 			i_rank = i->rank();
 			for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
@@ -1202,7 +1185,6 @@ void MCMF_CS2::compute_prices()
 
 			while ( nonempty_bucket( b) ) {
 				GET_FROM_BUCKET( i, b );
-				_n_prscan ++;
 
 				for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
 					if ( OPEN( a ) ) {
@@ -1280,75 +1262,8 @@ int MCMF_CS2::update_epsilon()
 	return ( 0 );
 }
 
-int MCMF_CS2::check_feas()
-{
-	if ( _check_solution == false)
-		return ( 0);
-	
-   return 0;
-   /*
-	NODE *i;
-	ARC *a, *a_stop;
-	long fa;
-	int ans = 1;
 
-	for ( i = _nodes; i != _sentinel_node; i ++) {
-		for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
-			if ( _cap[ N_ARC(a) ] > 0) {
-				fa = _cap[ N_ARC(a) ] - a->rez_capacity();
-				if ( fa < 0) {
-					ans = 0;
-					break;
-				}
-				_node_balance[ i - _nodes ] -= fa;
-				_node_balance[ a->head() - _nodes ] += fa;
-			}
-		}
-	}
 
-	for ( i = _nodes; i != _sentinel_node; i ++) {
-		if ( _node_balance[ i - _nodes ] != 0) {
-			ans = 0;
-			break;
-		}
-	}
-
-	return ( ans);
-   */
-}
-
-int MCMF_CS2::check_cs()
-{
-	// check complimentary slackness;
-	NODE *i;
-	ARC *a, *a_stop;
-
-	for ( i = _nodes.get(); i != _sentinel_node; i ++) {
-		for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
-
-			if ( OPEN(a) && (REDUCED_COST(i, a->head(), a) < 0) ) {
-				return ( 0);
-			}
-		}
-	}
-	return(1);
-}
-
-int MCMF_CS2::check_eps_opt()
-{
-	NODE *i;
-	ARC *a, *a_stop;
-
-	for ( i = _nodes.get(); i != _sentinel_node; i ++) {
-		for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
-
-			if ( OPEN(a) && (REDUCED_COST(i, a->head(), a) < - _epsilon) ) {
-				return ( 0);
-			}
-		}
-	}
-	return(1);
-}
 
 void MCMF_CS2::init_solution()
 {
@@ -1369,8 +1284,8 @@ void MCMF_CS2::init_solution()
 
 void MCMF_CS2::cs_cost_reinit()
 {
-	if ( _cost_restart == false)
-		return;
+	//if ( _cost_restart == false)
+	//	return;
 	
 	NODE *i; // current node
 	ARC *a;          // current arc
@@ -1385,7 +1300,7 @@ void MCMF_CS2::cs_cost_reinit()
 
 	rc = 0;
 	for ( i = _nodes.get(); i != _sentinel_node; i ++) {
-		rc = MIN(rc, i->price());
+		rc = std::min(rc, i->price());
 		i->set_first( i->suspended());
 		i->set_current( i->first());
 		i->set_q_next( _sentinel_node);
@@ -1406,7 +1321,7 @@ void MCMF_CS2::cs_cost_reinit()
 		minc = 0;
 		for ( a = i->first(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {		
 			if ( (OPEN(a) && ((rc = REDUCED_COST(i, a->head(), a)) < 0)) )
-				minc = MAX( _epsilon, -rc);
+				minc = std::max( _epsilon, -rc);
 		}
 		sum += minc;
 	}
@@ -1415,26 +1330,25 @@ void MCMF_CS2::cs_cost_reinit()
 
 	_cut_off_factor = CUT_OFF_COEF * std::pow(_n, CUT_OFF_POWER);
 
-	_cut_off_factor = MAX( _cut_off_factor, CUT_OFF_MIN);
+	_cut_off_factor = std::max( _cut_off_factor, double(CUT_OFF_MIN));
 
 	_n_ref = 0;
 
-	_n_refine = _n_discharge = _n_push = _n_relabel = 0;
-	_n_update = _n_scan = _n_prefine = _n_prscan = _n_prscan1 = 
-		_n_bad_pricein = _n_bad_relabel = 0;
+   _n_bad_pricein = _n_bad_relabel = 0;
 
 	_flag_price = 0;
 
 	_excq_first = NULL;
 }
 
-void MCMF_CS2::cs2_cost_restart( double *objective_cost)
+long long int MCMF_CS2::cs2_cost_restart()
 {
 	// restart after a cost update;
-	if ( _cost_restart == false)
-		return;
+	//if ( _cost_restart == false)
+	//	return;
 
 	int cc; // for storing return code;
+   double objective_cost;
 
    std::cout << "c \nc ******************************\n";
    std::cout << "c Restarting after a cost update\n";
@@ -1471,7 +1385,8 @@ void MCMF_CS2::cs2_cost_restart( double *objective_cost)
 		} while ( cc == 0 );
 	}
 
-	finishup( objective_cost );
+	finishup( &objective_cost );
+   return objective_cost;
 }
 
 long long int MCMF_CS2::compute_objective_cost() const
@@ -1489,61 +1404,7 @@ long long int MCMF_CS2::compute_objective_cost() const
    return obj;
 }
 
-void MCMF_CS2::print_solution()
-{
-	if ( _print_ans == false)
-		return;
 
-   for(ARC* a=_arcs.get(); a<_arcs.get()+_m*2; ++a) {
-      std::cout << N_NODE(a->sister()->head()) << "->" << N_NODE(a->head()) << ": flow = " << a->rez_capacity()  - _cap[N_ARC(a)] << "\n";
-   }
-   return;
-	
-	price_t cost;
-   
-	NODE *i;
-	ARC *a;
-	long ni;
-	for ( i = _nodes.get(); i < _nodes.get() + _n; i ++ ) {
-		ni = N_NODE( i );
-		for ( a = i->suspended(); a != (i+1)->suspended(); a ++) {
-         std::cout << a->rez_capacity();
-			//if ( _cap[ N_ARC (a) ]  > 0 ) {
-			//	printf("f %7ld %7ld %10ld\n", 
-			//		   ni, N_NODE(a->head()), _cap[ N_ARC(a) ] - a->rez_capacity());
-			//}
-		}
-    }
-
-	// COMP_DUALS?
-	if ( _comp_duals == true) { // find minimum price;
-		cost = MAX_32;
-		for ( i = _nodes.get(); i != _sentinel_node; i ++) {
-			cost = MIN(cost, i->price());
-		}
-		for ( i = _nodes.get(); i != _sentinel_node; i ++) {
-         std::cout << "p " << N_NODE(i) << " " << i->price() - cost << "\n";
-		}
-	}
-
-   std::cout << "c\n";
-}
-
-void MCMF_CS2::print_graph()
-{
-	NODE *i;
-	ARC *a;
-	long ni, na;
-   std::cout << "\nGraph: " << _n << "\n";
-	for ( i = _nodes.get(); i < _nodes.get() + _n; i ++ ) {
-		ni = N_NODE( i );
-      std::cout << "\nNode " << ni << "\n";
-		for ( a = i->suspended(); a != (i+1)->suspended(); a ++) {
-			na = N_ARC( a );
-         std::cout << "\n {" << na << "} " << ni << " -> " <<  N_NODE(a->head()) << " cap: " << _cap[N_ARC(a)] << " cost: " << a->cost() << "\n";
-      }
-    }
-}
 
 void MCMF_CS2::finishup( double *objective_cost)
 {
@@ -1555,15 +1416,15 @@ void MCMF_CS2::finishup( double *objective_cost)
 	NODE *i;
 
 	// (1) NO_ZERO_CYCLES?
-	if ( _no_zero_cycles == true) {
-		for ( a = _arcs.get(); a != _sentinel_arc; a ++ ) {
-			if ( a->cost() == 1) {
-				assert( a->sister()->cost() == -1);
-				a->set_cost( 0);
-				a->sister()->set_cost( 0);
-			}
-		}
-	}
+	//if ( _no_zero_cycles == true) {
+	//	for ( a = _arcs.get(); a != _sentinel_arc; a ++ ) {
+	//		if ( a->cost() == 1) {
+	//			assert( a->sister()->cost() == -1);
+	//			a->set_cost( 0);
+	//			a->sister()->set_cost( 0);
+	//		}
+	//	}
+	//}
 
 	// (2)
 	for ( a = _arcs.get(), na = 0; a != _sentinel_arc ; a ++, na ++ ) {
@@ -1578,9 +1439,9 @@ void MCMF_CS2::finishup( double *objective_cost)
 	}
 
 	// (3) COMP_DUALS?
-	if ( _comp_duals == true) {
+	//if ( _comp_duals == true) {
 		compute_prices();
-	}
+	//}
 
 	*objective_cost = obj_internal;
 }
@@ -1673,46 +1534,170 @@ long long int MCMF_CS2::run_cs2()
 	// (5) initializations;
 	//_m = 2 * _m;
 	cs2_initialize(); // works already with 2*m;
+	
+	// (6) run CS2;
+	cs2( &objective_cost );
+
+   return objective_cost;
+}
+
+long long int MCMF_CS2_STAT::run_cs2()
+{
 	print_graph(); // exit(1); // debug;
 
    std::cout << "\nc CS 4.3\n";
    std::cout << "c nodes: " << _n << " arcs: " << _m << "\n";
-   std::cout << "c scale-factor: " << _f_scale << " cut-off-factor: " << _cut_off_factor << "\nc\n",
+   std::cout << "c scale-factor: " << _f_scale << " cut-off-factor: " << _cut_off_factor << "\nc\n";
 
-	
-	// (6) run CS2;
-	cs2( &objective_cost );
-	double t = 0.0;
-  
-   std::cout << "c time:         " << t << "    cost:       " << objective_cost << "\n";
-	std::cout << "c refines:      " << _n_refine << "     discharges: " << _n_discharge << "\n";
-	std::cout << "c pushes:       " << _n_push << "     relabels:   " << _n_relabel << "\n";
-	std::cout << "c updates:      " << _n_update << "     u-scans:    " << _n_scan << "\n";
-	std::cout << "c p-refines:    " << _n_prefine << "     r-scans:    " << _n_prscan << "\n";
-	std::cout << "c dfs-scans:    " << _n_prscan1 << "     bad-in:     " << _n_bad_pricein << "  + " << _n_bad_relabel << "\n";
-  
+   auto start = std::chrono::steady_clock::now();
+   long long int obj = MCMF_CS2::run_cs2();
+   auto duration = std::chrono::duration_cast<std::chrono::milliseconds> 
+                            (std::chrono::steady_clock::now() - start);
 
+   std::cout << "c time:         " << duration.count() << "    cost:       " << obj << "\n";
+   //std::cout << "c refines:      " << _n_refine << "     discharges: " << _n_discharge << "\n";
+   //std::cout << "c pushes:       " << _n_push << "     relabels:   " << _n_relabel << "\n";
+   //std::cout << "c updates:      " << _n_update << "     u-scans:    " << _n_scan << "\n";
+   //std::cout << "c p-refines:    " << _n_prefine << "     r-scans:    " << _n_prscan << "\n";
+   //std::cout << "c dfs-scans:    " << _n_prscan1 << "     bad-in:     " << _n_bad_pricein << "  + " << _n_bad_relabel << "\n";
+  
 	// () CHECK_SOLUTION?
-	if ( _check_solution == true ) {
-		std::cout << "c checking feasibility...\n"; 
-		if ( check_feas() )
-			std::cout << "c ...OK\n";
-		else
-			std::cout << "c ERROR: solution infeasible\n";
-		std::cout << "c computing prices and checking CS...\n";
-		compute_prices();
-		if ( check_cs() )
-			std::cout << "c ...OK\n";
-		else
-			std::cout << "ERROR: CS violation\n";
-	}
+   std::cout << "c checking feasibility...\n"; 
+   if ( check_feas() )
+      std::cout << "c ...OK\n";
+   else
+      std::cout << "c ERROR: solution infeasible\n";
+   std::cout << "c computing prices and checking CS...\n";
+   //compute_prices();
+   if ( check_cs() )
+      std::cout << "c ...OK\n";
+   else
+      std::cout << "ERROR: CS violation\n";
 
 	// () PRINT_ANS?
-	if ( _print_ans == true ) {
-		print_solution();
+   print_solution();
+
+   return obj;
+}
+
+void MCMF_CS2_STAT::print_solution()
+{
+   for(ARC* a=_arcs.get(); a<_arcs.get()+_m*2; ++a) {
+      std::cout << N_NODE(a->sister()->head()) << "->" << N_NODE(a->head()) << ": flow = " << a->rez_capacity()  - _cap[N_ARC(a)] << "\n";
+   }
+   return;
+	
+	price_t cost;
+   
+	NODE *i;
+	ARC *a;
+	long ni;
+	for ( i = _nodes.get(); i < _nodes.get() + _n; i ++ ) {
+		ni = N_NODE( i );
+		for ( a = i->suspended(); a != (i+1)->suspended(); a ++) {
+         std::cout << a->rez_capacity();
+			//if ( _cap[ N_ARC (a) ]  > 0 ) {
+			//	printf("f %7ld %7ld %10ld\n", 
+			//		   ni, N_NODE(a->head()), _cap[ N_ARC(a) ] - a->rez_capacity());
+			//}
+		}
+    }
+
+	// COMP_DUALS?
+   cost = MAX_32;
+   for ( i = _nodes.get(); i != _sentinel_node; i ++) {
+      cost = std::min(cost, i->price());
+   }
+   for ( i = _nodes.get(); i != _sentinel_node; i ++) {
+      std::cout << "p " << N_NODE(i) << " " << i->price() - cost << "\n";
+   }
+
+   std::cout << "c\n";
+}
+
+void MCMF_CS2_STAT::print_graph()
+{
+	NODE *i;
+	ARC *a;
+	long ni, na;
+   std::cout << "\nGraph: " << _n << "\n";
+	for ( i = _nodes.get(); i < _nodes.get() + _n; i ++ ) {
+		ni = N_NODE( i );
+      std::cout << "\nNode " << ni << "\n";
+		for ( a = i->suspended(); a != (i+1)->suspended(); a ++) {
+			na = N_ARC( a );
+         std::cout << "\n {" << na << "} " << ni << " -> " <<  N_NODE(a->head()) << " cap: " << _cap[N_ARC(a)] << " cost: " << a->cost() << "\n";
+      }
+    }
+}
+
+int MCMF_CS2_STAT::check_feas()
+{
+   return 0;
+	
+   /*
+	NODE *i;
+	ARC *a, *a_stop;
+	long fa;
+	int ans = 1;
+
+	for ( i = _nodes; i != _sentinel_node; i ++) {
+		for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
+			if ( _cap[ N_ARC(a) ] > 0) {
+				fa = _cap[ N_ARC(a) ] - a->rez_capacity();
+				if ( fa < 0) {
+					ans = 0;
+					break;
+				}
+				_node_balance[ i - _nodes ] -= fa;
+				_node_balance[ a->head() - _nodes ] += fa;
+			}
+		}
 	}
 
-   return objective_cost;
+	for ( i = _nodes; i != _sentinel_node; i ++) {
+		if ( _node_balance[ i - _nodes ] != 0) {
+			ans = 0;
+			break;
+		}
+	}
+
+	return ( ans);
+   */
 }
+
+int MCMF_CS2_STAT::check_cs()
+{
+	// check complimentary slackness;
+	NODE *i;
+	ARC *a, *a_stop;
+
+	for ( i = _nodes.get(); i != _sentinel_node; i ++) {
+		for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
+
+			if ( OPEN(a) && (REDUCED_COST(i, a->head(), a) < 0) ) {
+				return ( 0);
+			}
+		}
+	}
+	return(1);
+}
+
+int MCMF_CS2_STAT::check_eps_opt()
+{
+	NODE *i;
+	ARC *a, *a_stop;
+
+	for ( i = _nodes.get(); i != _sentinel_node; i ++) {
+		for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
+
+			if ( OPEN(a) && (REDUCED_COST(i, a->head(), a) < - _epsilon) ) {
+				return ( 0);
+			}
+		}
+	}
+	return(1);
+}
+
 
 } // end namespace CS2_CPP

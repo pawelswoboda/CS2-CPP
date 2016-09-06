@@ -33,16 +33,14 @@ TEST_CASE( "dynamic problem", "[dynamic]" ) {
       flow[i] = mcf.get_flow(i);
    }
 
+   REQUIRE(flow[0] + flow[1] + flow[2] == 1);
    for(int i=0; i<3; ++i) {
       if(flow[i] == 1) { // increase cost by one and check whether cost of optimal solution is also increased by one
-         mcf.set_cost(i, mcf.get_cost(i) + 1);
+         mcf.update_cost(i, mcf.get_cost(i) + 1);
       }
-
    }
-   long new_cost = mcf.run_cs2();
+   long new_cost = mcf.cs2_cost_restart();
    REQUIRE(orig_cost <= new_cost);
-
-
-
+   REQUIRE(new_cost <= orig_cost + 1);
 }
 

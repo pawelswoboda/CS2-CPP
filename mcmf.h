@@ -1,24 +1,6 @@
-// Cristinel Ababei, January 2009, Fargo ND
-// E-mail: cristinel.ababei@ndsu.edu
-//
-// This is a C++ implementation of CS2 min-cost-max-flow scaling algorithm. 
-//
-// This is intended to be one of the cleanest and simplest to use minimum-cost 
-// max-flow (MCMF) implementation using C++.  If you have a C++ application in 
-// which you need to use a MCMF algo, then this may be your most elegant bet.
-// See main() function for an example of how to use it.
-// 
-// This is an adapted (i.e., ported to C++) version of the faimous CS2 algo;
-// CS2 is the second version of scaling algorithm for minimum-cost max-flow 
-// problems.  For a detailed description of this famous algo, see:
-// A.V. Goldberg, "An Efficient Implementation of a Scaling Minimum-Cost 
-// Flow Algorithm", Journal of Algorithms, Vol. 22, pp. 1-29, 1997.
-
 #ifndef _MCMF_H_
 #define _MCMF_H_
 
-//#include <stdio.h>
-//#include <stdlib.h>
 #include <cmath>
 #include <assert.h>
 
@@ -34,39 +16,34 @@ namespace CS2_CPP {
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#define MAX_64 (0x7fffffffffffffffLL)
-#define MAX_32 (0x7fffffff)
-#define PRICE_MAX MAX_64
-
-
-// TODO: make class parameters out of that, possibly constexpr ones
-// parameters
-#define UPDT_FREQ      0.4
-#define UPDT_FREQ_S    30
-#define SCALE_DEFAULT  12.0
-// PRICE_OUT_START may not be less than 1
-#define PRICE_OUT_START  1
-#define CUT_OFF_POWER    0.44
-#define CUT_OFF_COEF     1.5
-#define CUT_OFF_POWER2   0.75
-#define CUT_OFF_COEF2    1
-#define CUT_OFF_GAP      0.8
-#define CUT_OFF_MIN      12
-#define CUT_OFF_INCREASE 4
-
-#define TIME_FOR_PRICE_IN1    2
-#define TIME_FOR_PRICE_IN2    4
-#define TIME_FOR_PRICE_IN3    6
-
-#define MAX_CYCLES_CANCELLED 0
-#define START_CYCLE_CANCEL   100
-
-#define MAX( x, y ) ( ( (x) > (y) ) ?  x : y )
-#define MIN( x, y ) ( ( (x) < (y) ) ? x : y )
-#define ABS( x ) ( (x) >= 0 ) ? (x) : -(x)
-
 class MCMF_CS2
 {
+protected:
+   constexpr static long MAX_64  = 0x7fffffffffffffffLL;
+   constexpr static long MAX_32 = 0x7fffffff;
+   constexpr static long PRICE_MAX = MAX_64;
+
+   // parameters
+   constexpr static double UPDT_FREQ = 0.4;
+   constexpr static long UPDT_FREQ_S = 30;
+   constexpr static double SCALE_DEFAULT = 12.0;
+   // PRICE_OUT_START may not be less than 1
+   constexpr static long PRICE_OUT_START = 1;
+   constexpr static double CUT_OFF_POWER = 0.44;
+   constexpr static double CUT_OFF_COEF = 1.5;
+   constexpr static double CUT_OFF_POWER2 = 0.75;
+   constexpr static double CUT_OFF_COEF2 = 1;
+   constexpr static double CUT_OFF_GAP = 0.8;
+   constexpr static double CUT_OFF_MIN = 12;
+   constexpr static double CUT_OFF_INCREASE = 4;
+
+   constexpr static long TIME_FOR_PRICE_IN1 = 2;
+   constexpr static long TIME_FOR_PRICE_IN2 = 4;
+   constexpr static long TIME_FOR_PRICE_IN3 = 6;
+
+   constexpr static long MAX_CYCLES_CANCELLED = 0;
+   constexpr static long START_CYCLE_CANCEL = 100;
+
  public:
 	typedef long long int excess_t;
 	typedef long long int price_t;
@@ -157,6 +134,13 @@ class MCMF_CS2
 	long _n; // number of nodes
 	long _m; // number of arcs
 
+   // counters for operations.
+   long _n_rel; // number of relabels from last price update
+   long _n_ref; // current number of refines
+   long _n_src; // current number of nodes with excess
+   long _n_bad_pricein;
+   long _n_bad_relabel;
+
    std::unique_ptr<long[]> _cap;
 	//long *_cap; // array containig capacities
 	//NODE *_nodes; // array of nodes
@@ -199,29 +183,6 @@ class MCMF_CS2
 	NODE *_dummy_node; // the address of d_node
 	NODE *_dnode;
 
-	long _n_rel; // number of relabels from last price update
-	long _n_ref; // current number of refines
-	long _n_src; // current number of nodes with excess
-	long _n_push;
-	long _n_relabel;
-	long _n_discharge;
-	long _n_refine;
-	long _n_update;
-	long _n_scan;
-	long _n_prscan;
-	long _n_prscan1;
-	long _n_prscan2;
-	long _n_bad_pricein;
-	long _n_bad_relabel;
-	long _n_prefine;
-
-	bool _no_zero_cycles; // finds an optimal flow with no zero-cost cycles
-	bool _check_solution; // check feasibility/optimality. HIGH OVERHEAD!
-	bool _comp_duals; // compute prices?
-	bool _cost_restart; // to be able to restart after a cost function change
-	bool _print_ans;
-	long long int *_node_balance;
-
 	// sketch variables used during reading in arcs;
 	long _node_min; // minimal no of nodes
 	long _node_max; // maximal no of nodes
@@ -246,26 +207,12 @@ class MCMF_CS2
 		_n = num_nodes;
 		_m = num_arcs;
 
+      _n_bad_pricein = 0;
+      _n_bad_relabel = 0;
+
 		_flag_price = 0;
 		_flag_updt = 0;
-		_n_push = 0;
-		_n_relabel = 0;
-		_n_discharge = 0;
-		_n_refine = 0;
-		_n_update = 0;
-		_n_scan = 0;
-		_n_prscan = 0;
-		_n_prscan1 = 0;
-		_n_prscan2 = 0;
-		_n_bad_pricein = 0;
-		_n_bad_relabel = 0;
-		_n_prefine = 0;
-		_no_zero_cycles = false;
-		_check_solution = false;
-		_comp_duals = false;
-		_cost_restart = false;
-		_print_ans = true;
-		// allocate arrays and prepare for "receiving" arcs;
+      // allocate arrays and prepare for "receiving" arcs;
 		// will also reset _pos_current, etc.;
 		allocate_arrays();
 	}
@@ -291,14 +238,9 @@ class MCMF_CS2
 	void compute_prices();
 	void price_out();
 	int update_epsilon();
-	int check_feas();
-	int check_cs();
-	int check_eps_opt();
 	void init_solution();
 	void cs_cost_reinit();
-	void cs2_cost_restart( double *objective_cost);
-	void print_solution();
-	void print_graph();
+	long long int cs2_cost_restart();
 	void finishup( double *objective_cost);
 	void cs2( double *objective_cost);
 	price_t run_cs2();
@@ -316,7 +258,7 @@ class MCMF_CS2
    long get_cost(const long arc_id) const { return _arcs[arc_id].cost(); }
    long get_reduced_cost(const long arc_id) const { return get_cost(arc_id) + get_price(get_arc_tail(arc_id)) - get_price(get_arc_head(arc_id)); }
    long get_price(const long node_id) const { return _nodes[node_id].price(); }
-   void set_cost(const long arc_id, const price_t cost) { 
+   void update_cost(const long arc_id, const price_t cost) { 
       _arcs[arc_id].set_cost(cost);
       _arcs[arc_id].sister()->set_cost(-cost);
    }
@@ -405,7 +347,7 @@ class MCMF_CS2
 	void update_cut_off() {
 		if ( _n_bad_pricein + _n_bad_relabel == 0) {
 			_cut_off_factor = CUT_OFF_COEF2 * std::pow( _n, CUT_OFF_POWER2 );
-			_cut_off_factor = MAX ( _cut_off_factor, CUT_OFF_MIN );
+			_cut_off_factor = std::max ( _cut_off_factor, double(CUT_OFF_MIN) );
 			_cut_off = _cut_off_factor * _epsilon;
 			_cut_on = _cut_off * CUT_OFF_GAP;
 		} else {
@@ -444,6 +386,68 @@ class MCMF_CS2
 			_cap[N_ARC(b)] = d_cap;	
 		}
 	}
+};
+
+// class 
+// - counting how many operations were performed 
+// - checking feasibility of solutions after optimization 
+// - printing diagnostics and statistics after optimization
+// - printing graph and obtained flow
+class MCMF_CS2_STAT : public MCMF_CS2 {
+public:
+   MCMF_CS2_STAT( long num_nodes, long num_arcs) 
+      : MCMF_CS2(num_nodes, num_arcs)
+        /*
+        ,
+      _n_push(0),
+      _n_relabel(0),
+      _n_discharge(0),
+      _n_refine(0),
+      _n_update(0),
+      _n_scan(0),
+      _n_prscan(0),
+      _n_prscan1(0),
+      _n_prscan2(0),
+      _n_prefine(0),
+      _no_zero_cycles(false),
+      _check_solution(false),
+      _comp_duals(false),
+      _cost_restart(false),
+      _print_ans(true)
+      */
+   {}
+
+   long long int run_cs2();
+
+	void print_solution();
+	void print_graph();
+
+	int check_feas();
+	int check_cs();
+	int check_eps_opt();
+
+private:
+   /*
+   long _n_push;
+   long _n_relabel;
+   long _n_discharge;
+   long _n_refine;
+   long _n_update;
+   long _n_scan;
+   long _n_prscan;
+   long _n_prscan1;
+   long _n_prscan2;
+   long _n_prefine;
+   */
+
+   /*
+   bool _no_zero_cycles; // finds an optimal flow with no zero-cost cycles
+   bool _check_solution; // check feasibility/optimality. HIGH OVERHEAD!
+   bool _comp_duals; // compute prices?
+   bool _cost_restart; // to be able to restart after a cost function change -> should go to main class or be deleted
+	bool _print_ans;
+	long long int *_node_balance;
+   */
 };
 
 } // end namespace CS2_CPP
