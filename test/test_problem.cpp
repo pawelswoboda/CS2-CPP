@@ -6,7 +6,7 @@ using namespace CS2_CPP;
 TEST_CASE( "test problem", "[test problem]" ) {
 	const int num_nodes = 6;
 	const int num_arcs = 8;
-	MCMF_CS2 mcf( num_nodes, num_arcs);
+	MCMF_CS2<> mcf( num_nodes, num_arcs);
 
    mcf.set_arc( 0, 1, 0, 4, 1);
    mcf.set_arc( 0, 2, 0, 8, 5);

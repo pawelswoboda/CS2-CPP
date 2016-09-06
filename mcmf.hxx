@@ -273,6 +273,25 @@ protected:
    long N_ARC(ARC* a) const { return a - _arcs.get(); }
 
  
+   // loop utilities
+   template<typename LAMBDA>
+   void for_each_node(LAMBDA f) {
+      for(NODE* i= _nodes.get(); i<_nodes.get() + _n; ++i) {
+         f(i);
+      }
+   }
+   template<typename LAMBDA>
+   void for_each_arc(NODE* i, LAMBDA f) {
+      for(ARC* a = i->first(); a<i->suspended(); ++a) {
+         f(a);
+      }
+   }
+   template<typename LAMBDA>
+   void for_each_arc(long i, LAMBDA f) {
+      for(ARC* a = _nodes[i].first(); a<_nodes[i+1].first() ; ++a) {
+         f(a);
+      }
+   }
 
 	// shared utils;
 	void increase_flow( NODE *i, NODE *j, ARC *a, long df) {
@@ -400,7 +419,7 @@ template<typename COST_TYPE = long long int, typename CAPACITY_TYPE = long int>
 class MCMF_CS2_STAT : public MCMF_CS2<COST_TYPE, CAPACITY_TYPE> {
 public:
    MCMF_CS2_STAT( long num_nodes, long num_arcs) 
-      : MCMF_CS2(num_nodes, num_arcs)
+      : MCMF_CS2<COST_TYPE,CAPACITY_TYPE>(num_nodes, num_arcs)
         /*
         ,
       _n_push(0),
@@ -527,9 +546,8 @@ void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::allocate_arrays()
    std::fill(&_arc_first[0], &_arc_first[_n+1], 0);
 	// arc_first [ 0 .. n ] = 0 - initialized by calloc;
 
-	for ( NODE *in = _nodes.get(); in <= _nodes.get() + _n; in ++ ) {
-		in->set_excess( 0);
-	}
+	for_each_node([](NODE* i) { i->set_excess(0); });
+
 	if ( _nodes == NULL || _arcs == NULL || _arc_first == NULL || _arc_tail == NULL) {
       throw std::runtime_error("Error:  Memory allocation problem inside CS2\n");
 	}
@@ -754,9 +772,10 @@ void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::pre_processing()
       //std::sort(_nodes[i].first(), _nodes[i+1].first(),
       //      [] (ARC& a, ARC& b) { return a.head() < b.head(); });
       // correct sister arcs
-      for(ARC* a = _nodes[i].first(); a<_nodes[i+1].first() ; ++a) {
-         a->sister()->set_sister(a);
-      }
+      for_each_arc(i, [](ARC* a) { a->sister()->set_sister(a); });
+      //for(ARC* a = _nodes[i].first(); a<_nodes[i+1].first() ; ++a) {
+      //   a->sister()->set_sister(a);
+      //}
    }
    // arcs are ordered by now!
    delete[] perm;
@@ -804,11 +823,11 @@ void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::cs2_initialize()
 	_sentinel_node = _nodes.get() + _n;
 	_sentinel_arc  = _arcs.get() + 2*_m;
 
-	for ( i = _nodes.get(); i != _sentinel_node; i ++ ) {
+   for_each_node( [this](NODE* i) {
 		i->set_price( 0);
 		i->set_suspended( i->first());
 		i->set_q_next( _sentinel_node);
-	}
+         });
 
 	_sentinel_node->set_first( _sentinel_arc);
 	_sentinel_node->set_suspended( _sentinel_arc);
@@ -1536,157 +1555,157 @@ int MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::price_refine()
 template<typename COST_TYPE, typename CAPACITY_TYPE>
 void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::compute_prices()
 {
-	NODE *i; // current node
-	NODE *j; // opposite node
-	ARC *a; // arc (i,j)
-	ARC *a_stop; // first arc from the next node
-	long bmax; // number of farest nonempty bucket
-	long i_rank; // rank of node i
-	long j_rank; // rank of node j
-	long j_new_rank; // new rank of node j
-	BUCKET *b; // current bucket
+   NODE *i; // current node
+   NODE *j; // opposite node
+   ARC *a; // arc (i,j)
+   ARC *a_stop; // first arc from the next node
+   long bmax; // number of farest nonempty bucket
+   long i_rank; // rank of node i
+   long j_rank; // rank of node j
+   long j_new_rank; // new rank of node j
+   BUCKET *b; // current bucket
 	BUCKET *b_old; // old and new buckets of current node
-	BUCKET *b_new;
-	price_t rc; // reduced cost of a
-	price_t dr; // ranks difference
-	price_t dp;
-	int cc; // return code: 1 - flow is epsilon optimal 0 - refine is needed
+   BUCKET *b_new;
+   price_t rc; // reduced cost of a
+   price_t dr; // ranks difference
+   price_t dp;
+   int cc; // return code: 1 - flow is epsilon optimal 0 - refine is needed
 
-	cc = 1;
+   cc = 1;
 
-	// (1) main loop
-	// while negative cycle is found or eps-optimal solution is constructed
-	while ( 1 ) {
+   // (1) main loop
+   // while negative cycle is found or eps-optimal solution is constructed
+   while ( 1 ) {
 
-		for ( i = _nodes.get(); i != _sentinel_node; i ++) {
-			i->set_rank( 0);
-			i->set_inp( WHITE);
-			i->set_current( i->first());
-		}
-		reset_stackq();
+      for ( i = _nodes.get(); i != _sentinel_node; i ++) {
+         i->set_rank( 0);
+         i->set_inp( WHITE);
+         i->set_current( i->first());
+      }
+      reset_stackq();
 
-		for ( i = _nodes.get(); i != _sentinel_node; i ++ ) {
-			if ( i->inp() == BLACK ) continue;
+      for ( i = _nodes.get(); i != _sentinel_node; i ++ ) {
+         if ( i->inp() == BLACK ) continue;
 
-			i->set_b_next( NULL);
-			// depth first search
-			while ( 1 ) {
-				i->set_inp( GREY);
+         i->set_b_next( NULL);
+         // depth first search
+         while ( 1 ) {
+            i->set_inp( GREY);
 
-				// scanning arcs from node i
-				for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
-					if ( OPEN( a ) ) {
-						j = a->head();
-						if ( REDUCED_COST( i, j, a ) < 0 ) {
-							if ( j->inp() == WHITE ) { // fresh node  - step forward
-								i->set_current( a);
-								j->set_b_next( i);
-								i = j;
-								a = j->current();
-								a_stop = (j+1)->suspended();
-								break;
-							}
+            // scanning arcs from node i
+            for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
+               if ( OPEN( a ) ) {
+                  j = a->head();
+                  if ( REDUCED_COST( i, j, a ) < 0 ) {
+                     if ( j->inp() == WHITE ) { // fresh node  - step forward
+                        i->set_current( a);
+                        j->set_b_next( i);
+                        i = j;
+                        a = j->current();
+                        a_stop = (j+1)->suspended();
+                        break;
+                     }
 
-							if ( j->inp() == GREY ) { // cycle detected; should not happen
-								cc = 0;
-							}                     
-						}
-						// if j-color is BLACK - continue search from i
-					} 
-				} // all arcs from i are scanned 
+                     if ( j->inp() == GREY ) { // cycle detected; should not happen
+                        cc = 0;
+                     }                     
+                  }
+                  // if j-color is BLACK - continue search from i
+               } 
+            } // all arcs from i are scanned 
 
-				if ( a == a_stop ) {
-					// step back
-					i->set_inp( BLACK);
-					j = i->b_next();
-					stackq_push( i );
-					if ( j == NULL ) break;
-					i = j;
-					i->inc_current();
-				}
+            if ( a == a_stop ) {
+               // step back
+               i->set_inp( BLACK);
+               j = i->b_next();
+               stackq_push( i );
+               if ( j == NULL ) break;
+               i = j;
+               i->inc_current();
+            }
 
-			} // end of deapth first search
-		} // all nodes are scanned
-
-
-		// no negative cycle
-		// computing longest paths
-
-		if ( cc == 0 ) break;
-		bmax = 0;
-
-		while ( nonempty_stackq() ) {
-			STACKQ_POP( i );
-			i_rank = i->rank();
-			for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
-				if ( OPEN( a ) ) {
-					j  = a->head();
-					rc = REDUCED_COST( i, j, a );
+         } // end of deapth first search
+      } // all nodes are scanned
 
 
-					if ( rc < 0 ) {// admissible arc
-						dr = - rc;
-						if (( j_rank = dr + i_rank ) < _linf ) {
-							if ( j_rank > j->rank() )
-								j->set_rank( j_rank);
-						}
-					}
-				}
-			} // all arcs from i are scanned
+      // no negative cycle
+      // computing longest paths
 
-			if ( i_rank > 0 ) {
-				if ( i_rank > bmax ) bmax = i_rank;
-				b = _buckets.get() + i_rank;
-				insert_to_bucket( i, b );
-			}
-		} // end of while-cycle: all nodes are scanned - longest distancess are computed;
+      if ( cc == 0 ) break;
+      bmax = 0;
 
-		if ( bmax == 0 )
-			{ break; }
+      while ( nonempty_stackq() ) {
+         STACKQ_POP( i );
+         i_rank = i->rank();
+         for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
+            if ( OPEN( a ) ) {
+               j  = a->head();
+               rc = REDUCED_COST( i, j, a );
 
-		for ( b = _buckets.get() + bmax; b != _buckets.get(); b -- ) {
-			i_rank = b - _buckets.get();
-			dp = i_rank;
 
-			while ( nonempty_bucket( b) ) {
-				GET_FROM_BUCKET( i, b );
+               if ( rc < 0 ) {// admissible arc
+                  dr = - rc;
+                  if (( j_rank = dr + i_rank ) < _linf ) {
+                     if ( j_rank > j->rank() )
+                        j->set_rank( j_rank);
+                  }
+               }
+            }
+         } // all arcs from i are scanned
 
-				for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
-					if ( OPEN( a ) ) {
-						j = a->head();
-						j_rank = j->rank();
-						if ( j_rank < i_rank ) {
-							rc = REDUCED_COST( i, j, a );
- 
-							if ( rc < 0 ) {
-								j_new_rank = i_rank;
-							} else {
-								dr = rc;
-								j_new_rank = ( dr < _linf ) ? i_rank - ( (long)dr + 1 ) : 0;
-							}
-							if ( j_rank < j_new_rank ) {
-								if ( cc == 1 ) {
-									j->set_rank( j_new_rank);
-									if ( j_rank > 0 ) {
-										b_old = _buckets.get() + j_rank;
-										REMOVE_FROM_BUCKET( j, b_old );
-									}
-									b_new = _buckets.get() + j_new_rank;
-									insert_to_bucket( j, b_new );
-								}
-							}
-						}
-					} // end if opened arc
-				} // all arcs are scanned
+         if ( i_rank > 0 ) {
+            if ( i_rank > bmax ) bmax = i_rank;
+            b = _buckets.get() + i_rank;
+            insert_to_bucket( i, b );
+         }
+      } // end of while-cycle: all nodes are scanned - longest distancess are computed;
 
-				i->dec_price( dp);
+      if ( bmax == 0 )
+      { break; }
 
-			} // end of while-cycle: the bucket is scanned
-		} // end of for-cycle: all buckets are scanned
+      for ( b = _buckets.get() + bmax; b != _buckets.get(); b -- ) {
+         i_rank = b - _buckets.get();
+         dp = i_rank;
 
-		if ( cc == 0 ) break;
+         while ( nonempty_bucket( b) ) {
+            GET_FROM_BUCKET( i, b );
 
-	} // end of main loop
+            for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
+               if ( OPEN( a ) ) {
+                  j = a->head();
+                  j_rank = j->rank();
+                  if ( j_rank < i_rank ) {
+                     rc = REDUCED_COST( i, j, a );
+
+                     if ( rc < 0 ) {
+                        j_new_rank = i_rank;
+                     } else {
+                        dr = rc;
+                        j_new_rank = ( dr < _linf ) ? i_rank - ( (long)dr + 1 ) : 0;
+                     }
+                     if ( j_rank < j_new_rank ) {
+                        if ( cc == 1 ) {
+                           j->set_rank( j_new_rank);
+                           if ( j_rank > 0 ) {
+                              b_old = _buckets.get() + j_rank;
+                              REMOVE_FROM_BUCKET( j, b_old );
+                           }
+                           b_new = _buckets.get() + j_new_rank;
+                           insert_to_bucket( j, b_new );
+                        }
+                     }
+                  }
+               } // end if opened arc
+            } // all arcs are scanned
+
+            i->dec_price( dp);
+
+         } // end of while-cycle: the bucket is scanned
+      } // end of for-cycle: all buckets are scanned
+
+      if ( cc == 0 ) break;
+
+   } // end of main loop
 } 
 
 template<typename COST_TYPE, typename CAPACITY_TYPE>
@@ -1811,7 +1830,7 @@ void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::cs_cost_reinit()
 }
 
 template<typename COST_TYPE, typename CAPACITY_TYPE>
-long long <COST_TYPE,CAPACITY_TYPE>int MCMF_CS2::cs2_cost_restart()
+long long int MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::cs2_cost_restart()
 {
 	// restart after a cost update;
 	//if ( _cost_restart == false)
@@ -1860,7 +1879,7 @@ long long <COST_TYPE,CAPACITY_TYPE>int MCMF_CS2::cs2_cost_restart()
 }
 
 template<typename COST_TYPE, typename CAPACITY_TYPE>
-long long <COST_TYPE,CAPACITY_TYPE>int MCMF_CS2::compute_objective_cost() const
+long long int MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::compute_objective_cost() const
 {
    double obj = 0;
    int na;
@@ -1912,7 +1931,7 @@ void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::finishup( double *objective_cost)
 
 	// (3) COMP_DUALS?
 	//if ( _comp_duals == true) {
-		compute_prices();
+	//	compute_prices(); // sometimes goes into infinite loop
 	//}
 
 	*objective_cost = obj_internal;
@@ -1956,7 +1975,7 @@ void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::cs2( double *objective_cost)
 }
 
 template<typename COST_TYPE, typename CAPACITY_TYPE>
-long long <COST_TYPE,CAPACITY_TYPE>int MCMF_CS2::run_cs2()
+long long int MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::run_cs2()
 {
 	// example of flow network in DIMACS format:
 	//
@@ -2016,16 +2035,16 @@ long long <COST_TYPE,CAPACITY_TYPE>int MCMF_CS2::run_cs2()
 }
 
 template<typename COST_TYPE, typename CAPACITY_TYPE>
-long long <COST_TYPE,CAPACITY_TYPE>int MCMF_CS2_STAT::run_cs2()
+long long int MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::run_cs2()
 {
 	print_graph(); // exit(1); // debug;
 
    std::cout << "\nc CS 4.3\n";
-   std::cout << "c nodes: " << _n << " arcs: " << _m << "\n";
-   std::cout << "c scale-factor: " << _f_scale << " cut-off-factor: " << _cut_off_factor << "\nc\n";
+   std::cout << "c nodes: " << this->_n << " arcs: " << this->_m << "\n";
+   std::cout << "c scale-factor: " << this->_f_scale << " cut-off-factor: " << this->_cut_off_factor << "\nc\n";
 
    auto start = std::chrono::steady_clock::now();
-   long long int obj = MCMF_CS2::run_cs2();
+   long long int obj = MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::run_cs2();
    auto duration = std::chrono::duration_cast<std::chrono::milliseconds> 
                             (std::chrono::steady_clock::now() - start);
 
@@ -2058,19 +2077,18 @@ long long <COST_TYPE,CAPACITY_TYPE>int MCMF_CS2_STAT::run_cs2()
 template<typename COST_TYPE, typename CAPACITY_TYPE>
 void MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::print_solution()
 {
-   for(ARC* a=_arcs.get(); a<_arcs.get()+_m*2; ++a) {
-      std::cout << N_NODE(a->sister()->head()) << "->" << N_NODE(a->head()) << ": flow = " << a->rez_capacity()  - _cap[N_ARC(a)] << "\n";
+   for(auto* a=this->_arcs.get(); a<this->_arcs.get()+this->_m*2; ++a) {
+      std::cout << this->N_NODE(a->sister()->head()) << "->" << this->N_NODE(a->head()) << ": flow = " << a->rez_capacity()  - this->_cap[this->N_ARC(a)] << "\n";
    }
    return;
 	
+   /*
 	price_t cost;
    
-	NODE *i;
-	ARC *a;
 	long ni;
-	for ( i = _nodes.get(); i < _nodes.get() + _n; i ++ ) {
+	for (auto* i = _nodes.get(); i < _nodes.get() + _n; i ++ ) {
 		ni = N_NODE( i );
-		for ( a = i->suspended(); a != (i+1)->suspended(); a ++) {
+		for (auto* a = i->suspended(); a != (i+1)->suspended(); a ++) {
          std::cout << a->rez_capacity();
 			//if ( _cap[ N_ARC (a) ]  > 0 ) {
 			//	printf("f %7ld %7ld %10ld\n", 
@@ -2081,29 +2099,28 @@ void MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::print_solution()
 
 	// COMP_DUALS?
    cost = MAX_32;
-   for ( i = _nodes.get(); i != _sentinel_node; i ++) {
+   for (auto* i = _nodes.get(); i != _sentinel_node; i ++) {
       cost = std::min(cost, i->price());
    }
-   for ( i = _nodes.get(); i != _sentinel_node; i ++) {
+   for (auto* i = _nodes.get(); i != _sentinel_node; i ++) {
       std::cout << "p " << N_NODE(i) << " " << i->price() - cost << "\n";
    }
 
    std::cout << "c\n";
+   */
 }
 
 template<typename COST_TYPE, typename CAPACITY_TYPE>
 void MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::print_graph()
 {
-	NODE *i;
-	ARC *a;
 	long ni, na;
-   std::cout << "\nGraph: " << _n << "\n";
-	for ( i = _nodes.get(); i < _nodes.get() + _n; i ++ ) {
-		ni = N_NODE( i );
+   std::cout << "\nGraph: " << this->_n << "\n";
+	for (auto* i = this->_nodes.get(); i < this->_nodes.get() + this->_n; i ++ ) {
+		ni = this->N_NODE( i );
       std::cout << "\nNode " << ni << "\n";
-		for ( a = i->suspended(); a != (i+1)->suspended(); a ++) {
-			na = N_ARC( a );
-         std::cout << "\n {" << na << "} " << ni << " -> " <<  N_NODE(a->head()) << " cap: " << _cap[N_ARC(a)] << " cost: " << a->cost() << "\n";
+		for (auto* a = i->suspended(); a != (i+1)->suspended(); a ++) {
+			na = this->N_ARC( a );
+         std::cout << "\n {" << na << "} " << ni << " -> " <<  this->N_NODE(a->head()) << " cap: " << this->_cap[this->N_ARC(a)] << " cost: " << a->cost() << "\n";
       }
     }
 }
@@ -2111,7 +2128,8 @@ void MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::print_graph()
 template<typename COST_TYPE, typename CAPACITY_TYPE>
 int MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::check_feas()
 {
-   return 0;
+   // note: we must add _node_balance here as well to be able to check feasibility
+   return 1;
 	
    /*
 	NODE *i;
@@ -2147,12 +2165,11 @@ int MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::check_feas()
 template<typename COST_TYPE, typename CAPACITY_TYPE>
 int MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::check_cs()
 {
-	// check complimentary slackness;
-	NODE *i;
-	ARC *a, *a_stop;
-
-	for ( i = _nodes.get(); i != _sentinel_node; i ++) {
-		for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
+	// check complementary slackness;
+	for (auto* i = this->_nodes.get(); i != this->_sentinel_node; i ++) {
+      auto* a = i->suspended();
+      auto* a_stop = (i+1)->suspended();
+		for ( ; a != a_stop; a ++) {
 
 			if ( OPEN(a) && (REDUCED_COST(i, a->head(), a) < 0) ) {
 				return ( 0);
@@ -2165,13 +2182,11 @@ int MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::check_cs()
 template<typename COST_TYPE, typename CAPACITY_TYPE>
 int MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::check_eps_opt()
 {
-	NODE *i;
-	ARC *a, *a_stop;
-
-	for ( i = _nodes.get(); i != _sentinel_node; i ++) {
-		for ( a = i->suspended(), a_stop = (i + 1)->suspended(); a != a_stop; a ++) {
-
-			if ( OPEN(a) && (REDUCED_COST(i, a->head(), a) < - _epsilon) ) {
+	for (auto* i = this->_nodes.get(); i != this->_sentinel_node; i ++) {
+      auto* a = i->suspended();
+      auto* a_stop = (i+1)->suspended();
+		for ( ; a != a_stop; a ++) {
+			if ( OPEN(a) && (REDUCED_COST(i, a->head(), a) < - this->_epsilon) ) {
 				return ( 0);
 			}
 		}
