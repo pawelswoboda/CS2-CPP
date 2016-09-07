@@ -24,7 +24,6 @@ TEST_CASE( "assignment problem", "[assignment]" ) {
          mcf.set_supply_demand_of_node(i,1);
          mcf.set_supply_demand_of_node(3+i,-1);
       }
-      mcf.init();
       mcf.run_cs2();
 
       // read out solutions
@@ -48,7 +47,6 @@ TEST_CASE( "assignment problem", "[assignment]" ) {
          mcf_reverse.set_supply_demand_of_node(i,0);
          mcf_reverse.set_supply_demand_of_node(3+i,0);
       }
-      mcf_reverse.init();
       mcf_reverse.run_cs2();
       for(int i=0; i<num_arcs; ++i) {
          REQUIRE(mcf_reverse.get_flow(i) < 3);

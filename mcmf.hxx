@@ -5,9 +5,9 @@
 #include <assert.h>
 
 #include <algorithm>
+#include <fstream>
 #include <iostream>
 #include <memory>
-#include <string.h>
 #include <chrono>
 
 namespace CS2_CPP {
@@ -184,7 +184,7 @@ protected:
 	ARC _d_arc; // dummy arc - for technical reasons
 	NODE _d_node; // dummy node - for technical reasons
 	NODE *_dummy_node; // the address of d_node
-	NODE *_dnode;
+   std::unique_ptr<NODE> _dnode;
 
 	// sketch variables used during reading in arcs;
 	long _node_min; // minimal no of nodes
@@ -219,6 +219,9 @@ protected:
 		// will also reset _pos_current, etc.;
 		allocate_arrays();
 	}
+
+   MCMF_CS2(const std::string& file);
+
 	~MCMF_CS2() {
       deallocate_arrays();
    }
@@ -248,11 +251,10 @@ protected:
 	void cs2( double *objective_cost);
 	price_t run_cs2();
 
-   void init() { pre_processing(); } // needs to be called after adding all edges
-
    // information functions
    long no_nodes() const { return _n; }
    long no_arcs() const { return 2*_m; }
+   long no_arcs(const long i) const { return _nodes[i].first() - _nodes[i+1].first(); }
    price_t compute_objective_cost() const;
    long get_arc_tail(const long arc_id) const { return N_NODE(_arcs[arc_id].sister()->head()); }
    long get_arc_head(const long arc_id) const { return N_NODE(_arcs[arc_id].head()); }
@@ -265,7 +267,7 @@ protected:
       _arcs[arc_id].set_cost(cost);
       _arcs[arc_id].sister()->set_cost(-cost);
    }
-   void set_cap(const long arc_id, const long cap) { assert(cap >= 0); _cap[arc_id] = cap; }
+   void set_cap(const long arc_id, const long cap) { assert(false); assert(cap >= 0); _cap[arc_id] = cap; } // me must adjust residual capacity as well
 
    //#define N_NODE( i ) ( ( (i) == NULL ) ? -1 : ( (i) - _nodes + _node_min ) )
    long N_NODE(NODE* n) const { return n - _nodes.get() + _node_min; }
@@ -346,8 +348,8 @@ protected:
 		remove_from_excess_q( i);
 	}
 	// utils for buckets;
-	void reset_bucket( BUCKET *b) { b->set_p_first( _dnode); }
-	bool nonempty_bucket( BUCKET *b) { return ( (b->p_first()) != _dnode); }
+	void reset_bucket( BUCKET *b) { b->set_p_first( _dnode.get()); }
+	bool nonempty_bucket( BUCKET *b) { return ( (b->p_first()) != _dnode.get()); }
 	void insert_to_bucket( NODE *i, BUCKET *b) {
 		i->set_b_next( b->p_first() );
 		b->p_first()->set_b_prev( i);
@@ -439,6 +441,8 @@ public:
       _print_ans(true)
       */
    {}
+   MCMF_CS2_STAT(const std::string& file) : MCMF_CS2<COST_TYPE,CAPACITY_TYPE>(file) 
+   {}
 
    long long int run_cs2();
 
@@ -522,6 +526,65 @@ private:
 			}													\
 	}
 
+template<typename COST_TYPE, typename CAPACITY_TYPE>
+MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::MCMF_CS2(const std::string& file)
+{
+   _n_bad_pricein = 0;
+   _n_bad_relabel = 0;
+
+   _flag_price = 0;
+   _flag_updt = 0;
+
+   std::ifstream instance;
+   instance.open(file);
+   if(!instance.is_open()) {
+      throw std::runtime_error("could not open file " + file);
+   }
+   std::string line;
+   bool read_problem_def = false;
+   while(std::getline(instance, line))
+   {
+      if(line.empty()) continue;
+      std::istringstream iss(line);
+      char id;
+      if (!(iss >> id )) { throw std::runtime_error("in file " + file + ": cannot read line " + line); } 
+      switch(id) {
+         case 'c':
+            break;
+         case 'p': 
+            {
+               if(read_problem_def == true) { throw std::runtime_error("in file " + file + ": not more than one line beginning with 'p' allowed"); }
+               read_problem_def = true;
+               std::string min;
+               if( !(iss >> min >> _n >> _m)) { throw std::runtime_error("in file " + file + ": cannot read number of nodes and arcs from line:\n " + line); } 
+               if("min" != min) { throw std::runtime_error("in file " + file + ": min must come after 'p' in line:\n " + line); } 
+               allocate_arrays();
+               break;
+            }
+         case 'n': 
+            {
+               long id, flow;
+               if( !(iss >> id >> flow)) { throw std::runtime_error("in file " + file + ": cannot read number node id and external flow from line:\n " + line); } 
+               assert(id >= 1);
+               set_supply_demand_of_node(id-1,flow);
+               break;
+            }
+         case 'a': 
+            {
+               long i,j,lower,upper,cost;
+               if( !(iss >> i >> j >> lower >> upper >> cost)) { throw std::runtime_error("in file " + file + ": cannot read arc information from line:\n " + line); } 
+               assert(i >= 1);
+               assert(j >= 1);
+               set_arc(i-1,j-1,lower,upper,cost);
+               break;
+            }
+         default:
+            throw std::runtime_error("in file " + file + ": unknown line identifier " + std::to_string(id));
+            break;
+      }
+   }
+   if(read_problem_def == false) { throw std::runtime_error("Exactly one line beginning with 'p' allowed in file " + file); }
+}
 
 template<typename COST_TYPE, typename CAPACITY_TYPE>
 void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::allocate_arrays()
@@ -531,18 +594,24 @@ void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::allocate_arrays()
    // TODO: make unique pointers out of that.
 	//_nodes = (NODE*) calloc ( _n+1,   sizeof(NODE) );
    _nodes = std::unique_ptr<NODE[]>{ new NODE[_n+1] };
+   if(_nodes.get() == nullptr) { throw std::runtime_error("could not allocate _nodes"); }
    std::fill(&_nodes[0], &_nodes[_n+1], NODE());
 	//_arcs = (ARC*)  calloc ( 2*_m+1, sizeof(ARC) );
    _arcs = std::unique_ptr<ARC[]>{ new ARC[2*_m+1] };
+   if(_arcs.get() == nullptr) { throw std::runtime_error("could not allocate _arcs"); }
    std::fill(_arcs.get(), _arcs.get()+2*_m+1, ARC());
 	//_cap = (long*) calloc ( 2*_m,   sizeof(long) );
    _cap = std::unique_ptr<long[]>{ new long[2*_m] };
+   if(_cap.get() == nullptr) { throw std::runtime_error("could not allocate _cap"); }
    std::fill(&_cap[0], &_cap[2*_m], 0);
-   _dnode = new NODE;
+   _dnode = std::unique_ptr<NODE>{new NODE};
+   if(_dnode.get() == nullptr) { throw std::runtime_error("could not allocate _dnode"); }
 
 	_arc_tail = std::unique_ptr<long[]>{ new long[2*_m] }; // _arc_tail = (long*) calloc ( 2*_m,   sizeof(long) );
+   if(_arc_tail.get() == nullptr) { throw std::runtime_error("could not allocate _arc_tail"); }
    std::fill(&_arc_tail[0], &_arc_tail[2*_m], 0);
 	_arc_first = std::unique_ptr<long[]>{ new long[_n+1] }; //(long*) calloc ( _n+1,   sizeof(long) );
+   if(_arc_first.get() == nullptr) { throw std::runtime_error("could not allocate _arc_first"); }
    std::fill(&_arc_first[0], &_arc_first[_n+1], 0);
 	// arc_first [ 0 .. n ] = 0 - initialized by calloc;
 
@@ -567,7 +636,7 @@ template<typename COST_TYPE, typename CAPACITY_TYPE>
 void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::deallocate_arrays()
 { 
 	//if ( _arcs) free ( _arcs );
-	if ( _dnode) delete _dnode;
+	//if ( _dnode) delete _dnode;
 	//if ( _cap) free ( _cap );
 	//if ( _buckets) free ( _buckets );
 	//if ( _check_solution == true) free ( _node_balance );
@@ -679,7 +748,8 @@ void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::pre_processing()
 		( _nodes.get() + i )->set_first( _arcs.get() + _arc_first[i] );
 	}
 
-   long* perm = new long[_n]; // for holding permutations for sorting
+   std::unique_ptr<long[]> perm = std::unique_ptr<long[]>{new long[_n]}; // for holding permutations for sorting
+   if(perm.get() == nullptr) { throw std::runtime_error("could not allocate _perm"); }
 	// scanning all the nodes except the last
 	for ( i = _node_min; i <= _node_max; i ++ ) {
 
@@ -743,12 +813,13 @@ void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::pre_processing()
       // sort outgoing arcs of every node by head node id.
       // this is not done in the original implementation.
       long s = _nodes[i+1].first() - _nodes[i].first();
+      assert(s <= _n);
       for(int c=0; c<s; ++c) {
          perm[c] = c;
       }
       ARC* arc = _nodes[i].first();
       long* cap = &_cap[N_ARC(arc)];
-      std::sort(perm, perm+s, 
+      std::sort(perm.get(), perm.get()+s, 
             [arc](int i, int j) { return arc[i].head() < arc[j].head(); });
       // now follow cycles in permutation. negate permutation entries to avoid permuting back
       for(int c=0; c<s; ++c) {
@@ -778,7 +849,6 @@ void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::pre_processing()
       //}
    }
    // arcs are ordered by now!
-   delete[] perm;
    
 	// testing network for possible excess overflow
 	for ( NODE *ndp = _nodes.get() + _node_min; ndp <= _nodes.get() + _node_max; ndp ++ ) {
@@ -870,6 +940,9 @@ void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::cs2_initialize()
 
 	//_buckets = (BUCKET*) calloc ( _linf, sizeof(BUCKET));
 	_buckets = std::unique_ptr<BUCKET[]>( new BUCKET[_linf] );//, sizeof(BUCKET));
+   if(_buckets.get() == nullptr) { throw std::runtime_error("could not allocate _buckets"); }
+
+
 	//if ( _buckets == NULL )
    //   throw std::runtime_error("Allocation fault");
 
@@ -1977,26 +2050,7 @@ void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::cs2( double *objective_cost)
 template<typename COST_TYPE, typename CAPACITY_TYPE>
 long long int MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::run_cs2()
 {
-	// example of flow network in DIMACS format:
-	//
-	//"p min 6 8
-	//c min-cost flow problem with 6 nodes and 8 arcs
-	//n 1 10
-	//c supply of 10 at node 1
-	//n 6 -10
-	//c demand of 10 at node 6
-	//c arc list follows
-	//c arc has <tail> <head> <capacity l.b.> <capacity u.b> <cost>
-	//a 1 2 0 4 1
-	//a 1 3 0 8 5
-	//a 2 3 0 5 0
-	//a 3 5 0 10 1
-	//a 5 4 0 8 0
-	//a 5 6 0 8 9
-	//a 4 2 0 8 1
-	//a 4 6 0 8 1"
-	//
-	// in order to solve this flow problem we have to follow these steps:
+	// in order to solve the flow problem we have to follow these steps:
 	// 1. ctor of MCMF_CS2 // sets num of nodes and arcs
 	//                     // it also calls allocate_arrays()
 	// 2. call set_arc() for each arc
@@ -2012,7 +2066,7 @@ long long int MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::run_cs2()
 
 
 	// (4) ordering, etc.;
-	//pre_processing();
+	pre_processing();
 
 
 	// () CHECK_SOLUTION?
@@ -2037,7 +2091,7 @@ long long int MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::run_cs2()
 template<typename COST_TYPE, typename CAPACITY_TYPE>
 long long int MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::run_cs2()
 {
-	print_graph(); // exit(1); // debug;
+	//print_graph(); // exit(1); // debug;
 
    std::cout << "\nc CS 4.3\n";
    std::cout << "c nodes: " << this->_n << " arcs: " << this->_m << "\n";
@@ -2069,7 +2123,7 @@ long long int MCMF_CS2_STAT<COST_TYPE,CAPACITY_TYPE>::run_cs2()
       std::cout << "ERROR: CS violation\n";
 
 	// () PRINT_ANS?
-   print_solution();
+   //print_solution();
 
    return obj;
 }

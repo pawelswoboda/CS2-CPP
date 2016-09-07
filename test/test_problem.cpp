@@ -20,7 +20,6 @@ TEST_CASE( "test problem", "[test problem]" ) {
    mcf.set_supply_demand_of_node( 5, -10);
 
    SECTION("solve mcf") {
-      mcf.init();
       long obj = mcf.run_cs2();
       REQUIRE(obj == 70);
       // after solving, arcs are reordered lexicographically. Note that reverse arc is implicitly added by set_arc as well.

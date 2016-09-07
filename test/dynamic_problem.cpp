@@ -25,7 +25,6 @@ TEST_CASE( "dynamic problem", "[dynamic]" ) {
          mcf.set_supply_demand_of_node(i,1);
          mcf.set_supply_demand_of_node(3+i,-1);
       }
-      mcf.init();
       long orig_cost = mcf.run_cs2();
 
       // read out solutions

@@ -18,6 +18,8 @@ option(BUILD_TESTS "build tests" OFF)
 
 if(BUILD_TESTS)
    option(DOWNLOAD_TEST_DEPENDENCIES "Download test dependencies" ON)
+   option(BUILD_GTE_EVALUATION "download and test against gte instances" OFF)
+   option(BUILD_NETGEN_EVALUATION "download and test against netgen generated instances" OFF)
    # download external projects here
    if(DOWNLOAD_TEST_DEPENDENCIES)
       project(DOWNLOAD_TEST_DEPENDENCIES_PROJECT NONE)
