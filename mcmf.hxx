@@ -254,7 +254,7 @@ protected:
    // information functions
    long no_nodes() const { return _n; }
    long no_arcs() const { return 2*_m; }
-   long no_arcs(const long i) const { return _nodes[i].first() - _nodes[i+1].first(); }
+   long no_arcs(const long i) const { return _nodes[i+1].first() - _nodes[i].first(); }
    long starting_arc(const long i) const { return N_ARC(_nodes[i].first()); } // index of the first arc emanating out from node i
    price_t compute_objective_cost() const;
    long get_arc_tail(const long arc_id) const { return N_NODE(_arcs[arc_id].sister()->head()); }

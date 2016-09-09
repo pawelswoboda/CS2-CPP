@@ -46,6 +46,13 @@ TEST_CASE( "test problem", "[test problem]" ) {
       REQUIRE(mcf.get_arc_tail(14) == 5); REQUIRE(mcf.get_arc_head(14) == 3);
       REQUIRE(mcf.get_arc_tail(15) == 5); REQUIRE(mcf.get_arc_head(15) == 4);
 
+      REQUIRE(mcf.starting_arc(0) == 0); REQUIRE(mcf.no_arcs(0) == 2);
+      REQUIRE(mcf.starting_arc(1) == 2); REQUIRE(mcf.no_arcs(1) == 3);
+      REQUIRE(mcf.starting_arc(2) == 5); REQUIRE(mcf.no_arcs(2) == 3);
+      REQUIRE(mcf.starting_arc(3) == 8); REQUIRE(mcf.no_arcs(3) == 3);
+      REQUIRE(mcf.starting_arc(4) == 11); REQUIRE(mcf.no_arcs(4) == 3);
+      REQUIRE(mcf.starting_arc(5) == 14); REQUIRE(mcf.no_arcs(5) == 2);
+
       // correct flow values
       // here I must know the original capacities
       //REQUIRE(mcf.get_flow(0) == 4);
