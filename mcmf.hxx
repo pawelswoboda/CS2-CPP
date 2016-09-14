@@ -264,11 +264,23 @@ protected:
    long get_cost(const long arc_id) const { return _arcs[arc_id].cost(); }
    long get_reduced_cost(const long arc_id) const { return get_cost(arc_id) + get_price(get_arc_tail(arc_id)) - get_price(get_arc_head(arc_id)); }
    long get_price(const long node_id) const { return _nodes[node_id].price(); }
+   void copy_cost(MCMF_CS2* m) {
+      assert(m->no_arcs() == this->no_arcs());
+      for(long a=0; a<no_arcs(); ++a) {
+         _arcs[a].set_cost( m->get_cost(a) );
+      }
+   }
    void update_cost(const long arc_id, const price_t cost) { 
       _arcs[arc_id].set_cost(cost);
       _arcs[arc_id].sister()->set_cost(-cost);
    }
    void set_cap(const long arc_id, const long cap) { assert(false); assert(cap >= 0); _cap[arc_id] = cap; } // me must adjust residual capacity as well
+   void set_cap(const long arc_id, const long lower, const long upper) { 
+      assert(false); // me must adjust residual capacity as well
+      assert(lower < upper);
+      _cap[arc_id] = upper; 
+      _cap[N_ARC( _arcs[arc_id]->sister() )] = lower;
+   } 
 
    //#define N_NODE( i ) ( ( (i) == NULL ) ? -1 : ( (i) - _nodes + _node_min ) )
    long N_NODE(NODE* n) const { return n - _nodes.get() + _node_min; }
@@ -656,8 +668,8 @@ void MCMF_CS2<COST_TYPE,CAPACITY_TYPE>::set_arc( long tail_node_id, long head_no
 	// c arc has <tail> <head> <capacity l.b.> <capacity u.b> <cost>
    assert(_pos_current < 2*_m);
 
-	if ( tail_node_id < 0 || tail_node_id >= _n || 
-		 head_node_id < 0 || head_node_id >= _n ) {
+   if ( tail_node_id < 0 || tail_node_id >= _n || 
+         head_node_id < 0 || head_node_id >= _n ) {
       throw std::runtime_error("Error:  Arc with head or tail out of bounds inside CS2");
    }
    if ( up_bound < 0 ) {
